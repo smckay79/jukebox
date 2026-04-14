@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import MiniQR from "./MiniQR";
 import type { Song } from "@/lib/types";
 
 // Minimal typings for the YouTube IFrame API surface we use.
@@ -57,9 +58,11 @@ function loadYouTubeApi(): Promise<void> {
 export default function Player({
   song,
   onEnded,
+  partyCode,
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
+  partyCode?: string;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -114,7 +117,7 @@ export default function Player({
 
   return (
     <div className="card overflow-hidden">
-      <div className="aspect-video w-full bg-black">
+      <div className="relative aspect-video w-full bg-black">
         {song ? (
           <div ref={mountRef} className="h-full w-full" />
         ) : (
@@ -122,6 +125,13 @@ export default function Player({
             Nothing playing — add a song to get started.
           </div>
         )}
+        {/* QR overlay so latecomers can scan straight off the TV. Pointer
+            events disabled so it never steals clicks from the iframe. */}
+        {song && partyCode ? (
+          <div className="pointer-events-none absolute bottom-3 right-3 hidden md:block">
+            <MiniQR code={partyCode} size={96} />
+          </div>
+        ) : null}
       </div>
       {song ? (
         <div className="flex items-center gap-3 px-4 py-3">

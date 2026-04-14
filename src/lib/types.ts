@@ -36,6 +36,9 @@ export interface Party {
   history: Song[]; // played songs
   banned: BannedVideo[];
   theme?: PartyTheme;
+  // Optional ticker text shown scrolling across the bottom of the screen
+  // on the desktop/TV view. Empty string or undefined = no ticker.
+  marquee?: string;
 }
 
 export interface PublicParty {
@@ -46,4 +49,5 @@ export interface PublicParty {
   nowPlaying: Song | null;
   banned: BannedVideo[];
   theme?: PartyTheme;
+  marquee?: string;
 }

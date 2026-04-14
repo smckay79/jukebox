@@ -132,6 +132,7 @@ export function toPublicParty(p: Party): PublicParty {
     nowPlaying: p.nowPlaying,
     banned: p.banned ?? [],
     theme: p.theme,
+    marquee: p.marquee,
   };
 }
 
@@ -381,6 +382,23 @@ export async function setTheme(
     party.theme = clean;
   }
 
+  await persist(party);
+  return { ok: true, party };
+}
+
+// Empty/whitespace-only input clears the marquee. We cap length so an
+// overenthusiastic host can't paste a novel onto the TV.
+const MAX_MARQUEE_LEN = 300;
+
+export async function setMarquee(
+  code: string,
+  text: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  const clean = (text ?? "").toString().trim().slice(0, MAX_MARQUEE_LEN);
+  party.marquee = clean || undefined;
   await persist(party);
   return { ok: true, party };
 }

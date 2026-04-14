@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddSong from "./AddSong";
 import Background from "./Background";
 import BannedList from "./BannedList";
+import Marquee from "./Marquee";
 import NowPlayingCompact from "./NowPlayingCompact";
 import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
-import ThemePicker from "./ThemePicker";
+import SettingsMenu from "./SettingsMenu";
 import { getAdminKey, getUserId } from "@/lib/identity";
 import type { PartyTheme, PublicParty, Song } from "@/lib/types";
 
@@ -207,6 +208,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "theme", theme });
   }
 
+  async function onSetMarquee(text: string): Promise<string | null> {
+    return adminPost({ action: "marquee", marquee: text });
+  }
+
   const isAdmin = !!adminKey;
 
   const bannedIds = useMemo(
@@ -238,13 +243,21 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             ) : null}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             className="btn-ghost text-sm"
             onClick={() => setShowQR((v) => !v)}
           >
             {showQR ? "Hide QR" : "Show QR"}
           </button>
+          {isAdmin ? (
+            <SettingsMenu
+              theme={party.theme}
+              marquee={party.marquee}
+              onSetTheme={onSetTheme}
+              onSetMarquee={onSetMarquee}
+            />
+          ) : null}
         </div>
       </header>
 
@@ -279,14 +292,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         </div>
         {showQR ? <QRCard code={party.code} /> : null}
         {isAdmin ? (
-          <>
-            <ThemePicker theme={party.theme} onApply={onSetTheme} />
-            <BannedList
-              banned={party.banned}
-              onUnban={onUnban}
-              onBanUrl={onBanUrl}
-            />
-          </>
+          <BannedList
+            banned={party.banned}
+            onUnban={onUnban}
+            onBanUrl={onBanUrl}
+          />
         ) : null}
       </div>
 
@@ -305,7 +315,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onAdded={setParty}
             bannedIds={bannedIds}
           />
-          <Player song={party.nowPlaying} onEnded={onEnded} />
+          <Player
+            song={party.nowPlaying}
+            onEnded={onEnded}
+            partyCode={party.code}
+          />
           {isAdmin ? (
             <div className="flex justify-end">
               <button
@@ -337,14 +351,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           {/* When QR is hidden the admin tools move inline below the queue
               instead of sitting in a side column. */}
           {!showQR && isAdmin ? (
-            <>
-              <ThemePicker theme={party.theme} onApply={onSetTheme} />
-              <BannedList
-                banned={party.banned}
-                onUnban={onUnban}
-                onBanUrl={onBanUrl}
-              />
-            </>
+            <BannedList
+              banned={party.banned}
+              onUnban={onUnban}
+              onBanUrl={onBanUrl}
+            />
           ) : null}
         </section>
         {showQR ? (
@@ -362,7 +373,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     with your friends so they can add songs.
                   </p>
                 </div>
-                <ThemePicker theme={party.theme} onApply={onSetTheme} />
                 <BannedList
                   banned={party.banned}
                   onUnban={onUnban}
@@ -374,6 +384,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         ) : null}
       </div>
       </main>
+      <Marquee text={party.marquee} />
     </>
   );
 }
