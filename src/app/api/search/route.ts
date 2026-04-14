@@ -100,7 +100,14 @@ export async function GET(req: Request) {
       })
       .filter((x): x is SearchResult => x !== null);
 
-    cache.set(ck, { at: Date.now(), data: results });
+    // Boost "Official Video" / "Official Music Video" over everything else,
+    // then "Official Audio", then plain "Official". Stable within ties so
+    // YouTube's own relevance order is preserved for same-score results.
+    const ranked = results
+      .map((r, i) => ({ r, i, s: officialBoost(r.title) }))
+      .sort((a, b) => (b.s - a.s) || (a.i - b.i))
+      .map(({ r }) => r);
+
     if (cache.size > CACHE_MAX) {
       // Drop the oldest half in one pass; good enough LRU for our scale.
       const entries = [...cache.entries()].sort(
@@ -110,10 +117,22 @@ export async function GET(req: Request) {
         cache.delete(entries[i][0]);
       }
     }
-    return NextResponse.json({ results });
+    return NextResponse.json({ results: ranked });
   } catch {
     return NextResponse.json({ error: "Search failed" }, { status: 500 });
   }
+}
+
+// Scoring: official-video always wins, then official-audio, then plain
+// "official". Lyric videos go below plain to push them down without hiding.
+function officialBoost(title: string): number {
+  const t = title.toLowerCase();
+  if (/official\s+(music\s+)?video/.test(t)) return 3;
+  if (/\(official\)|\[official\]/.test(t)) return 2;
+  if (/official\s+audio/.test(t)) return 2;
+  if (/\bofficial\b/.test(t)) return 1;
+  if (/lyric(s)?\s+video|lyric\s+video/.test(t)) return -1;
+  return 0;
 }
 
 // ---------- helpers ----------

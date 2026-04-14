@@ -16,9 +16,11 @@ interface SearchResult {
 export default function AddSong({
   code,
   onAdded,
+  bannedIds,
 }: {
   code: string;
   onAdded: (party: PublicParty) => void;
+  bannedIds?: Set<string>;
 }) {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
@@ -120,9 +122,10 @@ export default function AddSong({
       await addVideo(urlVideoId);
       return;
     }
-    // If there's an active search with at least one result, Enter adds the top result.
-    if (results.length > 0) {
-      const top = results[0];
+    // If there's an active search with at least one non-banned result, Enter
+    // adds the top unbanned result.
+    const top = results.find((r) => !bannedIds?.has(r.videoId));
+    if (top) {
       await addVideo(top.videoId, {
         title: top.title,
         thumbnail: top.thumbnail,
@@ -189,39 +192,56 @@ export default function AddSong({
 
       {!urlVideoId && results.length > 0 ? (
         <ul className="space-y-2" role="listbox">
-          {results.map((r) => (
-            <li
-              key={r.videoId}
-              className="flex items-center gap-3 rounded-lg bg-white/5 p-2 hover:bg-white/10"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={r.thumbnail}
-                alt=""
-                className="h-12 w-20 flex-shrink-0 rounded object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{r.title}</div>
-                <div className="mt-0.5 truncate text-xs text-white/50">
-                  {r.channelTitle}
-                  {r.duration ? ` · ${r.duration}` : ""}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-ghost !px-3 !py-1 text-sm"
-                disabled={addingId === r.videoId}
-                onClick={() =>
-                  addVideo(r.videoId, {
-                    title: r.title,
-                    thumbnail: r.thumbnail,
-                  })
+          {results.map((r) => {
+            const banned = bannedIds?.has(r.videoId) ?? false;
+            return (
+              <li
+                key={r.videoId}
+                className={
+                  "flex items-center gap-3 rounded-lg p-2 " +
+                  (banned
+                    ? "bg-red-950/40 opacity-60"
+                    : "bg-white/5 hover:bg-white/10")
                 }
               >
-                {addingId === r.videoId ? "…" : "Add"}
-              </button>
-            </li>
-          ))}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={r.thumbnail}
+                  alt=""
+                  className="h-12 w-20 flex-shrink-0 rounded object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{r.title}</div>
+                  <div className="mt-0.5 truncate text-xs text-white/50">
+                    {r.channelTitle}
+                    {r.duration ? ` · ${r.duration}` : ""}
+                  </div>
+                </div>
+                {banned ? (
+                  <span
+                    className="rounded-md bg-red-600/50 px-2 py-1 text-xs font-medium"
+                    title="This video is banned from the party"
+                  >
+                    Banned
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-ghost !px-3 !py-1 text-sm"
+                    disabled={addingId === r.videoId}
+                    onClick={() =>
+                      addVideo(r.videoId, {
+                        title: r.title,
+                        thumbnail: r.thumbnail,
+                      })
+                    }
+                  >
+                    {addingId === r.videoId ? "…" : "Add"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </form>

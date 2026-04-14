@@ -1,7 +1,27 @@
 import { randomBytes } from "crypto";
 import { getRedis } from "./kv";
 import { publishPartyUpdate } from "./pubsub";
-import type { Party, PublicParty, Song } from "./types";
+import type { BannedVideo, Party, PublicParty, Song } from "./types";
+
+// Seeded on every new party. Other bans get added live by the admin.
+const DEFAULT_BANS: BannedVideo[] = [
+  {
+    videoId: "dQw4w9WgXcQ",
+    title: "Rick Astley - Never Gonna Give You Up",
+    thumbnail: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    bannedAt: 0,
+  },
+];
+
+// Legacy records (created before `banned` existed) need the field backfilled
+// so every read after the upgrade returns a usable shape. Applied uniformly
+// by both storage backends.
+function normalizeParty(p: Party | (Party & { banned?: BannedVideo[] })): Party {
+  if (!Array.isArray((p as Party).banned)) {
+    (p as Party).banned = DEFAULT_BANS.slice();
+  }
+  return p as Party;
+}
 
 // ---------- storage backends ----------
 
@@ -23,7 +43,8 @@ class MemoryStorage implements Storage {
     this.store = g.__jukeboxMem;
   }
   async get(code: string) {
-    return this.store.get(code) ?? null;
+    const p = this.store.get(code);
+    return p ? normalizeParty(p) : null;
   }
   async set(party: Party) {
     this.store.set(party.code, party);
@@ -44,7 +65,8 @@ class RedisStorage implements Storage {
     // Upstash auto-parses JSON values set as strings *or* objects.
     const raw = await this.redis.get<Party | string>(this.key(code));
     if (!raw) return null;
-    return typeof raw === "string" ? (JSON.parse(raw) as Party) : raw;
+    const p = typeof raw === "string" ? (JSON.parse(raw) as Party) : raw;
+    return normalizeParty(p);
   }
   async set(party: Party) {
     await this.redis.set(this.key(party.code), JSON.stringify(party), {
@@ -108,6 +130,7 @@ export function toPublicParty(p: Party): PublicParty {
     createdAt: p.createdAt,
     queue: sortQueue(p.queue),
     nowPlaying: p.nowPlaying,
+    banned: p.banned ?? [],
   };
 }
 
@@ -143,6 +166,7 @@ export async function createParty(name: string): Promise<Party> {
     queue: [],
     nowPlaying: null,
     history: [],
+    banned: DEFAULT_BANS.slice(),
   };
   await persist(party);
   return party;
@@ -168,6 +192,10 @@ export async function addSong(
   const s = storage();
   const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
+
+  if (party.banned.some((b) => b.videoId === input.videoId)) {
+    return { ok: false, error: "That song has been banned from this party" };
+  }
 
   const already =
     party.queue.some((x) => x.videoId === input.videoId) ||
@@ -264,6 +292,53 @@ export async function songEnded(
   party.history.push(party.nowPlaying);
   party.nowPlaying = null;
   promoteNext(party);
+  await persist(party);
+  return { ok: true, party };
+}
+
+// Adds the video to the party's ban list (idempotent), and cleans it out of
+// the queue / nowPlaying so it stops playing immediately.
+export async function banVideo(
+  code: string,
+  input: { videoId: string; title: string; thumbnail: string },
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  if (!party.banned.some((b) => b.videoId === input.videoId)) {
+    party.banned.unshift({
+      videoId: input.videoId,
+      title: input.title.slice(0, 200) || "Banned video",
+      thumbnail:
+        input.thumbnail ||
+        `https://i.ytimg.com/vi/${input.videoId}/hqdefault.jpg`,
+      bannedAt: Date.now(),
+    });
+  }
+
+  party.queue = party.queue.filter((x) => x.videoId !== input.videoId);
+  if (party.nowPlaying?.videoId === input.videoId) {
+    party.nowPlaying = null;
+    promoteNext(party);
+  }
+
+  await persist(party);
+  return { ok: true, party };
+}
+
+export async function unbanVideo(
+  code: string,
+  videoId: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  const before = party.banned.length;
+  party.banned = party.banned.filter((b) => b.videoId !== videoId);
+  if (party.banned.length === before) {
+    return { ok: false, error: "Not in ban list" };
+  }
   await persist(party);
   return { ok: true, party };
 }

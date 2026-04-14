@@ -9,6 +9,13 @@ export interface Song {
   votes: string[]; // userIds that upvoted
 }
 
+export interface BannedVideo {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  bannedAt: number;
+}
+
 export interface Party {
   code: string; // public join code
   adminKey: string; // secret, only creator holds
@@ -17,6 +24,7 @@ export interface Party {
   queue: Song[];
   nowPlaying: Song | null;
   history: Song[]; // played songs
+  banned: BannedVideo[];
 }
 
 export interface PublicParty {
@@ -25,4 +33,5 @@ export interface PublicParty {
   createdAt: number;
   queue: Song[];
   nowPlaying: Song | null;
+  banned: BannedVideo[];
 }

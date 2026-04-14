@@ -8,12 +8,14 @@ export default function Queue({
   isAdmin,
   onVote,
   onRemove,
+  onBan,
 }: {
   party: PublicParty;
   userId: string;
   isAdmin: boolean;
   onVote: (song: Song) => void;
   onRemove?: (song: Song) => void;
+  onBan?: (song: Song) => void;
 }) {
   if (party.queue.length === 0) {
     return (
@@ -62,14 +64,27 @@ export default function Queue({
                 {song.votes.length}
               </span>
             </button>
-            {isAdmin && onRemove ? (
-              <button
-                onClick={() => onRemove(song)}
-                className="btn-ghost !px-2 !py-1 text-xs"
-                title="Remove song"
-              >
-                Remove
-              </button>
+            {isAdmin ? (
+              <div className="flex flex-shrink-0 flex-col gap-1">
+                {onRemove ? (
+                  <button
+                    onClick={() => onRemove(song)}
+                    className="btn-ghost !px-2 !py-1 text-xs"
+                    title="Remove song from queue"
+                  >
+                    Remove
+                  </button>
+                ) : null}
+                {onBan ? (
+                  <button
+                    onClick={() => onBan(song)}
+                    className="rounded-md bg-red-600/80 px-2 py-1 text-xs font-medium hover:bg-red-500"
+                    title="Ban this video from the party"
+                  >
+                    Ban
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </li>
         );
