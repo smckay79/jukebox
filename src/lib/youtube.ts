@@ -37,6 +37,28 @@ export function parseYouTubeId(input: string): string | null {
   return null;
 }
 
+// Parse a YouTube / YouTube Music playlist URL (or raw playlist ID) into
+// an ID suitable for playlistItems.list. Accepts the `list=` query param
+// on watch / playlist / music.youtube.com links. Returns null when the
+// input isn't recognizable.
+export function parsePlaylistId(input: string): string | null {
+  const s = input.trim();
+  if (!s) return null;
+
+  // Raw ID: usually 13–40 chars starting with PL/LL/RD/OL/UU/FL/LM/PU,
+  // but accept anything that matches the YouTube character set.
+  if (/^[A-Za-z0-9_-]{10,}$/.test(s) && !s.startsWith("http")) return s;
+
+  try {
+    const url = new URL(s.startsWith("http") ? s : `https://${s}`);
+    const list = url.searchParams.get("list");
+    if (list && /^[A-Za-z0-9_-]+$/.test(list)) return list;
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
 // Fetch video title + thumbnail via YouTube's public oEmbed endpoint.
 // No API key required; returns null on failure.
 export async function fetchVideoMeta(

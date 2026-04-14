@@ -220,6 +220,78 @@ export async function addSong(
   return { ok: true, song, party };
 }
 
+// Bulk-add used by the playlist import. Single read + single write + single
+// publish, so a 50-song import is one Redis round-trip rather than 50.
+// Already-queued / currently-playing / banned videos are silently skipped
+// and counted in the response so the UI can report them.
+export async function addSongs(
+  code: string,
+  items: Array<{
+    videoId: string;
+    title: string;
+    thumbnail: string;
+  }>,
+  by: { addedBy: string; addedByUserId: string },
+): Promise<
+  | {
+      ok: true;
+      party: Party;
+      added: number;
+      skippedDuplicate: number;
+      skippedBanned: number;
+    }
+  | { ok: false; error: string }
+> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  const bannedSet = new Set(party.banned.map((b) => b.videoId));
+  const present = new Set<string>();
+  for (const q of party.queue) present.add(q.videoId);
+  if (party.nowPlaying) present.add(party.nowPlaying.videoId);
+
+  let added = 0;
+  let skippedBanned = 0;
+  let skippedDuplicate = 0;
+  const now = Date.now();
+  const addedBy = by.addedBy.trim() || "Anonymous";
+
+  for (const input of items) {
+    const vid = input.videoId;
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) continue;
+    if (bannedSet.has(vid)) {
+      skippedBanned++;
+      continue;
+    }
+    if (present.has(vid)) {
+      skippedDuplicate++;
+      continue;
+    }
+    present.add(vid);
+    party.queue.push({
+      id: makeId(),
+      videoId: vid,
+      title: (input.title || "YouTube video").slice(0, 200),
+      thumbnail:
+        input.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+      addedBy,
+      addedByUserId: by.addedByUserId,
+      // Stagger addedAt so FIFO order within an import matches the playlist
+      // order. Without the offset, ties fall back on songId (random).
+      addedAt: now + added,
+      votes: [by.addedByUserId],
+    });
+    added++;
+  }
+
+  if (added > 0) {
+    if (!party.nowPlaying) promoteNext(party);
+    await persist(party);
+  }
+  return { ok: true, party, added, skippedDuplicate, skippedBanned };
+}
+
 export async function voteSong(
   code: string,
   songId: string,

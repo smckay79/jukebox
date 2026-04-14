@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddSong from "./AddSong";
 import Background from "./Background";
 import BannedList from "./BannedList";
+import ImportPlaylist from "./ImportPlaylist";
 import Marquee from "./Marquee";
 import NowPlayingCompact from "./NowPlayingCompact";
 import Player from "./Player";
@@ -273,6 +274,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     [party.banned],
   );
 
+  const queuedIds = useMemo(() => {
+    const s = new Set(party.queue.map((q) => q.videoId));
+    if (party.nowPlaying) s.add(party.nowPlaying.videoId);
+    return s;
+  }, [party.queue, party.nowPlaying]);
+
   return (
     <>
       <Background theme={party.theme} />
@@ -329,6 +336,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           onAdded={setParty}
           bannedIds={bannedIds}
         />
+        <ImportPlaylist
+          code={party.code}
+          bannedIds={bannedIds}
+          queuedIds={queuedIds}
+          onImported={setParty}
+        />
         <div>
           <h2 className="mb-2 text-lg font-semibold">
             Up next{" "}
@@ -369,6 +382,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             code={party.code}
             onAdded={setParty}
             bannedIds={bannedIds}
+          />
+          <ImportPlaylist
+            code={party.code}
+            bannedIds={bannedIds}
+            queuedIds={queuedIds}
+            onImported={setParty}
           />
           <div
             ref={presenterRef}
