@@ -1,14 +1,69 @@
 import { randomBytes } from "crypto";
+import { getRedis } from "./kv";
 import type { Party, PublicParty, Song } from "./types";
 
-// In-memory store. Roadmap: replace with Vercel KV / Supabase for real-time
-// sync across regions and across cold starts. See README.
-type GlobalStore = { parties: Map<string, Party> };
-const g = globalThis as unknown as { __jukeboxStore?: GlobalStore };
-if (!g.__jukeboxStore) {
-  g.__jukeboxStore = { parties: new Map() };
+// ---------- storage backends ----------
+
+interface Storage {
+  get(code: string): Promise<Party | null>;
+  set(party: Party): Promise<void>;
+  delete(code: string): Promise<void>;
 }
-const store = g.__jukeboxStore;
+
+// Fallback used in local dev when no KV creds are set. Works on a single
+// warm Node process; will NOT survive serverless cold starts or scale
+// across instances. For production use Redis.
+class MemoryStorage implements Storage {
+  private store: Map<string, Party>;
+
+  constructor() {
+    const g = globalThis as unknown as { __jukeboxMem?: Map<string, Party> };
+    if (!g.__jukeboxMem) g.__jukeboxMem = new Map();
+    this.store = g.__jukeboxMem;
+  }
+  async get(code: string) {
+    return this.store.get(code) ?? null;
+  }
+  async set(party: Party) {
+    this.store.set(party.code, party);
+  }
+  async delete(code: string) {
+    this.store.delete(code);
+  }
+}
+
+class RedisStorage implements Storage {
+  private redis = getRedis()!;
+  private ttlSeconds = 60 * 60 * 24 * 7; // 7 days
+
+  private key(code: string) {
+    return `party:${code.toUpperCase()}`;
+  }
+  async get(code: string) {
+    // Upstash auto-parses JSON values set as strings *or* objects.
+    const raw = await this.redis.get<Party | string>(this.key(code));
+    if (!raw) return null;
+    return typeof raw === "string" ? (JSON.parse(raw) as Party) : raw;
+  }
+  async set(party: Party) {
+    await this.redis.set(this.key(party.code), JSON.stringify(party), {
+      ex: this.ttlSeconds,
+    });
+  }
+  async delete(code: string) {
+    await this.redis.del(this.key(code));
+  }
+}
+
+let storageInstance: Storage | null = null;
+function storage(): Storage {
+  if (!storageInstance) {
+    storageInstance = getRedis() ? new RedisStorage() : new MemoryStorage();
+  }
+  return storageInstance;
+}
+
+// ---------- helpers ----------
 
 function makeCode(len = 6): string {
   // Unambiguous characters (no 0/O/1/I)
@@ -27,25 +82,14 @@ function makeId(): string {
   return randomBytes(8).toString("hex");
 }
 
-export function createParty(name: string): Party {
-  let code = makeCode();
-  // avoid collisions
-  while (store.parties.has(code)) code = makeCode();
-  const party: Party = {
-    code,
-    adminKey: makeAdminKey(),
-    name: name.trim() || "The Party",
-    createdAt: Date.now(),
-    queue: [],
-    nowPlaying: null,
-    history: [],
-  };
-  store.parties.set(code, party);
-  return party;
-}
-
-export function getParty(code: string): Party | null {
-  return store.parties.get(code.toUpperCase()) ?? null;
+export function sortQueue(queue: Song[]): Song[] {
+  // Higher votes first; ties broken by earliest addedAt (FIFO).
+  return [...queue].sort((a, b) => {
+    if (b.votes.length !== a.votes.length) {
+      return b.votes.length - a.votes.length;
+    }
+    return a.addedAt - b.addedAt;
+  });
 }
 
 export function toPublicParty(p: Party): PublicParty {
@@ -58,15 +102,49 @@ export function toPublicParty(p: Party): PublicParty {
   };
 }
 
-export function sortQueue(queue: Song[]): Song[] {
-  // Higher votes first, then FIFO (earliest addedAt first).
-  return [...queue].sort((a, b) => {
-    if (b.votes.length !== a.votes.length) return b.votes.length - a.votes.length;
-    return a.addedAt - b.addedAt;
-  });
+function promoteNext(party: Party) {
+  if (party.nowPlaying) return;
+  const sorted = sortQueue(party.queue);
+  const next = sorted[0];
+  if (!next) return;
+  party.queue = party.queue.filter((s) => s.id !== next.id);
+  party.nowPlaying = next;
 }
 
-export function addSong(
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+// ---------- public API ----------
+
+export async function createParty(name: string): Promise<Party> {
+  const s = storage();
+  let code = makeCode();
+  // collision-avoidance; probability is tiny, but be safe
+  for (let i = 0; i < 5 && (await s.get(code)); i++) code = makeCode();
+
+  const party: Party = {
+    code,
+    adminKey: makeAdminKey(),
+    name: name.trim() || "The Party",
+    createdAt: Date.now(),
+    queue: [],
+    nowPlaying: null,
+    history: [],
+  };
+  await s.set(party);
+  return party;
+}
+
+export async function getParty(code: string): Promise<Party | null> {
+  if (!code) return null;
+  return storage().get(code.toUpperCase());
+}
+
+export async function addSong(
   code: string,
   input: {
     videoId: string;
@@ -75,12 +153,15 @@ export function addSong(
     addedBy: string;
     addedByUserId: string;
   },
-): { ok: true; song: Song } | { ok: false; error: string } {
-  const party = getParty(code);
+): Promise<
+  { ok: true; song: Song; party: Party } | { ok: false; error: string }
+> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
 
   const already =
-    party.queue.some((s) => s.videoId === input.videoId) ||
+    party.queue.some((x) => x.videoId === input.videoId) ||
     party.nowPlaying?.videoId === input.videoId;
   if (already) return { ok: false, error: "That song is already in the queue" };
 
@@ -95,22 +176,24 @@ export function addSong(
     votes: [input.addedByUserId], // adding implies upvote
   };
   party.queue.push(song);
-
-  // If nothing playing, promote immediately.
-  if (!party.nowPlaying) {
-    promoteNext(party);
-  }
-  return { ok: true, song };
+  if (!party.nowPlaying) promoteNext(party);
+  await s.set(party);
+  return { ok: true, song, party };
 }
 
-export function voteSong(
+export async function voteSong(
   code: string,
   songId: string,
   userId: string,
-): { ok: true; votes: number; voted: boolean } | { ok: false; error: string } {
-  const party = getParty(code);
+): Promise<
+  | { ok: true; votes: number; voted: boolean; party: Party }
+  | { ok: false; error: string }
+> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
-  const song = party.queue.find((s) => s.id === songId);
+
+  const song = party.queue.find((x) => x.id === songId);
   if (!song) return { ok: false, error: "Song not in queue" };
 
   const idx = song.votes.indexOf(userId);
@@ -122,70 +205,66 @@ export function voteSong(
     song.votes.splice(idx, 1);
     voted = false;
   }
-  return { ok: true, votes: song.votes.length, voted };
+  await s.set(party);
+  return { ok: true, votes: song.votes.length, voted, party };
 }
 
-export function removeSong(
+export async function removeSong(
   code: string,
   songId: string,
-): { ok: true } | { ok: false; error: string } {
-  const party = getParty(code);
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
+
   const before = party.queue.length;
-  party.queue = party.queue.filter((s) => s.id !== songId);
+  party.queue = party.queue.filter((x) => x.id !== songId);
   if (party.queue.length === before) {
     return { ok: false, error: "Song not found" };
   }
-  return { ok: true };
+  await s.set(party);
+  return { ok: true, party };
 }
 
-export function skipCurrent(
+export async function skipCurrent(
   code: string,
-): { ok: true } | { ok: false; error: string } {
-  const party = getParty(code);
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
+
   if (party.nowPlaying) party.history.push(party.nowPlaying);
   party.nowPlaying = null;
   promoteNext(party);
-  return { ok: true };
+  await s.set(party);
+  return { ok: true, party };
 }
 
-// Called when current song ends (by a viewer) — only advances if the currently
-// playing song is still the one reported finished.
-export function songEnded(
+// Called when a viewer's player signals the current song has ended.
+// Idempotent: if another instance already advanced, this is a no-op.
+export async function songEnded(
   code: string,
   videoId: string,
-): { ok: true } | { ok: false; error: string } {
-  const party = getParty(code);
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
   if (!party.nowPlaying || party.nowPlaying.videoId !== videoId) {
-    return { ok: true }; // already advanced by someone else
+    return { ok: true, party };
   }
   party.history.push(party.nowPlaying);
   party.nowPlaying = null;
   promoteNext(party);
-  return { ok: true };
+  await s.set(party);
+  return { ok: true, party };
 }
 
-function promoteNext(party: Party) {
-  if (party.nowPlaying) return;
-  const sorted = sortQueue(party.queue);
-  const next = sorted[0];
-  if (!next) return;
-  party.queue = party.queue.filter((s) => s.id !== next.id);
-  party.nowPlaying = next;
-}
-
-export function verifyAdmin(code: string, key: string | null | undefined): boolean {
+export async function verifyAdmin(
+  code: string,
+  key: string | null | undefined,
+): Promise<boolean> {
   if (!key) return false;
-  const party = getParty(code);
+  const party = await storage().get(code.toUpperCase());
   if (!party) return false;
   return timingSafeEqual(party.adminKey, key);
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let r = 0;
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
 }

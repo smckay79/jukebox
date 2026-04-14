@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getParty, removeSong, skipCurrent, toPublicParty, verifyAdmin } from "@/lib/store";
+import { removeSong, skipCurrent, toPublicParty, verifyAdmin } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,12 +10,8 @@ export async function POST(
   req: Request,
   { params }: { params: { code: string } },
 ) {
-  const party = getParty(params.code);
-  if (!party) {
-    return NextResponse.json({ error: "Party not found" }, { status: 404 });
-  }
   const key = req.headers.get("x-admin-key");
-  if (!verifyAdmin(params.code, key)) {
+  if (!(await verifyAdmin(params.code, key))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -27,19 +23,23 @@ export async function POST(
   }
 
   if (body.action === "skip") {
-    skipCurrent(params.code);
-    return NextResponse.json({ party: toPublicParty(party) });
+    const res = await skipCurrent(params.code);
+    if (!res.ok) {
+      return NextResponse.json({ error: res.error }, { status: 404 });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
   }
   if (body.action === "remove") {
     const songId = (body.songId ?? "").toString();
     if (!songId) {
       return NextResponse.json({ error: "Missing songId" }, { status: 400 });
     }
-    const res = removeSong(params.code, songId);
+    const res = await removeSong(params.code, songId);
     if (!res.ok) {
-      return NextResponse.json({ error: res.error }, { status: 400 });
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
     }
-    return NextResponse.json({ party: toPublicParty(party) });
+    return NextResponse.json({ party: toPublicParty(res.party) });
   }
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

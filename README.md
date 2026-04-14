@@ -24,11 +24,37 @@ Open http://localhost:3000.
 ## Deploy to Vercel
 
 1. Push this repo to GitHub (already done if you used Claude Code).
-2. Go to <https://vercel.com/new> and import the repo.
-3. No env vars required for v1 — click **Deploy**.
-4. Vercel auto-deploys on each push to the branch.
+2. Go to <https://vercel.com/new> and import the repo. Click **Deploy** — no
+   env vars needed to get a build up.
+3. **Add persistent storage** (required for the app to actually work —
+   without it you'll hit "Party not found" after creating a party, because
+   Vercel serverless instances don't share memory):
+   - In the Vercel project, go to **Storage → Create Database → Upstash for
+     Redis** (or the "KV" option; it's Upstash under the hood).
+   - Accept the free tier. Click **Connect** to link it to this project.
+   - Vercel injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or
+     `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) automatically.
+   - Redeploy. Done.
+4. Future pushes to the connected branch redeploy automatically.
 
-## How it works (v1)
+### Storage modes
+
+`src/lib/store.ts` picks a backend at startup:
+
+- If `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or the `UPSTASH_REDIS_REST_*`
+  equivalents) are set → **Upstash Redis**. Parties are stored as JSON with
+  a 7-day TTL.
+- Otherwise → **in-memory `Map`**. Fine for `npm run dev`; broken on
+  serverless because cold starts + multiple instances mean state is not
+  shared.
+
+## Local dev without Redis
+
+`npm run dev` works with no env vars — the store uses an in-memory `Map` on
+the dev server, which is fine for a single Node process. For production,
+follow the Deploy to Vercel steps above to hook up Upstash.
+
+## How it works
 
 - **Create a party**: the creator gets a 6-char party code plus a secret admin
   key stored in `localStorage`. The admin key is what gates skip/remove.
@@ -43,17 +69,17 @@ Open http://localhost:3000.
 
 ## Roadmap — iterate from here
 
-The v1 server state is in `src/lib/store.ts` using an in-memory `Map` on
-`globalThis`. This is fine for a demo but has two limits:
+Server state now lives in Upstash Redis (when env vars are present) via
+`src/lib/store.ts`. Roadmap:
 
-1. Serverless cold starts wipe the map.
-2. State isn't shared across regions / function instances.
-
-Planned iterations:
-
-- **Persistent real-time backend.** Swap `store.ts` for Supabase or Vercel KV +
-  Postgres. Use Postgres `LISTEN/NOTIFY` (Supabase Realtime) or Pusher to push
-  queue updates; drop the 3-second polling in `PartyRoom`.
+- **Real-time push.** Currently the client polls every 3s. Next step: use
+  Upstash Redis pub/sub, Supabase Realtime, or Pusher to push queue deltas
+  to connected clients so votes appear instantly. Drop the polling in
+  `PartyRoom.tsx`.
+- **Per-party concurrency.** Party writes currently do
+  read-mutate-write-back on the JSON blob, so a pile of simultaneous votes
+  could drop one. For a single party it's fine; at scale we'd switch to
+  Redis hashes or Lua scripts for atomic updates.
 - **Proper auth.** Replace the "localStorage admin key" with NextAuth (Google
   / magic link) so hosts keep their parties across browsers.
 - **YouTube search.** Add a `/api/search` using the YouTube Data API so guests

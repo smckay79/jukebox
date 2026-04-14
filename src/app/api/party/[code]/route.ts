@@ -8,7 +8,7 @@ export async function GET(
   _req: Request,
   { params }: { params: { code: string } },
 ) {
-  const party = getParty(params.code);
+  const party = await getParty(params.code);
   if (!party) {
     return NextResponse.json({ error: "Party not found" }, { status: 404 });
   }

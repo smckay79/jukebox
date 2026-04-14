@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addSong, getParty, toPublicParty } from "@/lib/store";
+import { addSong, toPublicParty } from "@/lib/store";
 import { fetchVideoMeta, parseYouTubeId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -9,11 +9,6 @@ export async function POST(
   req: Request,
   { params }: { params: { code: string } },
 ) {
-  const party = getParty(params.code);
-  if (!party) {
-    return NextResponse.json({ error: "Party not found" }, { status: 404 });
-  }
-
   let body: {
     url?: string;
     videoId?: string;
@@ -45,7 +40,7 @@ export async function POST(
     thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
   };
 
-  const result = addSong(params.code, {
+  const result = await addSong(params.code, {
     videoId,
     title: meta.title,
     thumbnail: meta.thumbnail,
@@ -53,7 +48,11 @@ export async function POST(
     addedByUserId: userId,
   });
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const status = result.error === "Party not found" ? 404 : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
-  return NextResponse.json({ song: result.song, party: toPublicParty(party) });
+  return NextResponse.json({
+    song: result.song,
+    party: toPublicParty(result.party),
+  });
 }

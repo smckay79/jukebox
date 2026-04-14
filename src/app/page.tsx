@@ -48,10 +48,7 @@ export default function Home() {
       </div>
 
       <footer className="mt-16 text-center text-sm text-white/40">
-        <p>
-          v1 · in-memory store · real-time backend + auth coming soon.{" "}
-          <span aria-hidden>·</span> Have fun out there.
-        </p>
+        <p>v1 · real-time push &amp; sign-in coming soon. Have fun out there.</p>
       </footer>
     </main>
   );

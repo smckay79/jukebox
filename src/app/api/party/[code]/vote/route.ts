@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getParty, toPublicParty, voteSong } from "@/lib/store";
+import { toPublicParty, voteSong } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,11 +8,6 @@ export async function POST(
   req: Request,
   { params }: { params: { code: string } },
 ) {
-  const party = getParty(params.code);
-  if (!party) {
-    return NextResponse.json({ error: "Party not found" }, { status: 404 });
-  }
-
   let body: { songId?: string; userId?: string } = {};
   try {
     body = await req.json();
@@ -27,13 +22,14 @@ export async function POST(
       { status: 400 },
     );
   }
-  const result = voteSong(params.code, songId, userId);
+  const result = await voteSong(params.code, songId, userId);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const status = result.error === "Party not found" ? 404 : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({
     votes: result.votes,
     voted: result.voted,
-    party: toPublicParty(party),
+    party: toPublicParty(result.party),
   });
 }

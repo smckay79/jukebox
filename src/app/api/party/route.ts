@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     /* allow empty body */
   }
   const name = (body.name ?? "").toString().slice(0, 60);
-  const party = createParty(name);
+  const party = await createParty(name);
   return NextResponse.json({
     code: party.code,
     adminKey: party.adminKey,
