@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getDisplayName, getUserId } from "@/lib/identity";
 import type { PublicParty } from "@/lib/types";
 
@@ -10,13 +10,30 @@ interface PreviewItem {
   channelTitle: string;
   thumbnail: string;
   duration?: string;
+  durationSeconds?: number;
 }
+
+interface MatchCandidate {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  duration?: string;
+  durationSeconds?: number;
+  score: number;
+}
+
+// Matching runs this many lookups in parallel. Innertube is free of quota
+// but round-trips take ~500ms-1s, so the batch size mostly trades latency
+// for politeness. 6 keeps a 100-song playlist matched in ~15s.
+const MATCH_CONCURRENCY = 6;
 
 // Collapsible card that lets a guest paste a YouTube / YouTube Music
 // playlist URL (or just its ID), preview the tracks, pick which ones to
-// keep, and bulk-add them in one Redis round-trip. Handy for importing
-// the user's "Liked music" playlist — they just need to set it at least
-// to unlisted so the server can read it with the public API key.
+// keep, and bulk-add them in one Redis round-trip. After the preview
+// loads, a background worker tries to automatch each item against its
+// official music video (for YouTube Music "- Topic" audio entries) via
+// the /api/youtube/match endpoint.
 export default function ImportPlaylist({
   code,
   bannedIds,
@@ -37,6 +54,23 @@ export default function ImportPlaylist({
   const [submitting, setSubmitting] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
+  // videoId of the original preview item -> the matched music-video
+  // candidate we found (or null once we've tried and given up).
+  const [matches, setMatches] = useState<Map<string, MatchCandidate | null>>(
+    new Map(),
+  );
+  // How many items we've attempted to match. Combined with items.length this
+  // drives the "Matching music videos… 42/99" progress line.
+  const [matchProgress, setMatchProgress] = useState({ done: 0, total: 0 });
+  const [matchEnabled, setMatchEnabled] = useState(true);
+  // videoId of originals the user explicitly wants to keep as-is (even
+  // though a match was found). Default behavior: use the match if present.
+  const [keepOriginal, setKeepOriginal] = useState<Set<string>>(new Set());
+
+  // A ref + generation counter so we can cancel a match pass when the user
+  // loads a different playlist mid-flight.
+  const matchGen = useRef(0);
+
   async function loadPlaylist(e: React.FormEvent) {
     e.preventDefault();
     const v = raw.trim();
@@ -45,6 +79,12 @@ export default function ImportPlaylist({
     setError(null);
     setFlash(null);
     setItems(null);
+    setMatches(new Map());
+    setMatchProgress({ done: 0, total: 0 });
+    setKeepOriginal(new Set());
+    // Bump generation so any in-flight match worker from a previous load
+    // sees the change and bails out.
+    matchGen.current += 1;
     try {
       const res = await fetch(
         `/api/youtube/playlist?id=${encodeURIComponent(v)}`,
@@ -59,7 +99,6 @@ export default function ImportPlaylist({
       }
       const results = (data as { results?: PreviewItem[] }).results ?? [];
       setItems(results);
-      // Default: everything selectable (not banned, not already in queue).
       const next = new Set<string>();
       for (const r of results) {
         if (!bannedIds.has(r.videoId) && !queuedIds.has(r.videoId)) {
@@ -73,6 +112,67 @@ export default function ImportPlaylist({
       setLoading(false);
     }
   }
+
+  // Kick off the match worker whenever items load. Cancellation uses the
+  // generation counter so a superseded pass can silently bow out.
+  const startMatching = useCallback(
+    (list: PreviewItem[]) => {
+      const gen = ++matchGen.current;
+      setMatchProgress({ done: 0, total: list.length });
+      let idx = 0;
+      let done = 0;
+
+      async function worker() {
+        while (true) {
+          if (gen !== matchGen.current) return;
+          const i = idx++;
+          if (i >= list.length) return;
+          const it = list[i];
+          let match: MatchCandidate | null = null;
+          try {
+            const qs = new URLSearchParams({
+              videoId: it.videoId,
+              title: it.title,
+              channel: it.channelTitle,
+            });
+            if (it.durationSeconds) {
+              qs.set("duration", String(it.durationSeconds));
+            }
+            const res = await fetch(`/api/youtube/match?${qs.toString()}`, {
+              cache: "no-store",
+            });
+            if (res.ok) {
+              const data = (await res.json()) as {
+                match?: MatchCandidate | null;
+              };
+              match = data.match ?? null;
+            }
+          } catch {
+            match = null;
+          }
+          if (gen !== matchGen.current) return;
+          setMatches((prev) => {
+            const n = new Map(prev);
+            n.set(it.videoId, match);
+            return n;
+          });
+          done += 1;
+          setMatchProgress({ done, total: list.length });
+        }
+      }
+
+      const workers = Array.from(
+        { length: Math.min(MATCH_CONCURRENCY, list.length) },
+        () => worker(),
+      );
+      void Promise.all(workers);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (items && items.length > 0) startMatching(items);
+  }, [items, startMatching]);
 
   function toggle(videoId: string) {
     setSelected((s) => {
@@ -98,12 +198,41 @@ export default function ImportPlaylist({
     setSelected(new Set());
   }
 
+  function toggleUseOriginal(videoId: string) {
+    setKeepOriginal((s) => {
+      const n = new Set(s);
+      if (n.has(videoId)) n.delete(videoId);
+      else n.add(videoId);
+      return n;
+    });
+  }
+
+  // What we'll actually send for a given preview row: the match if we have
+  // one and the user hasn't overridden, otherwise the original.
+  function effectiveFor(it: PreviewItem): {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+  } {
+    const m = matches.get(it.videoId);
+    if (m && matchEnabled && !keepOriginal.has(it.videoId)) {
+      return { videoId: m.videoId, title: m.title, thumbnail: m.thumbnail };
+    }
+    return {
+      videoId: it.videoId,
+      title: it.title,
+      thumbnail: it.thumbnail,
+    };
+  }
+
   async function submit() {
     if (!items || selected.size === 0) return;
     setSubmitting(true);
     setError(null);
     setFlash(null);
-    const picks = items.filter((it) => selected.has(it.videoId));
+    const picks = items
+      .filter((it) => selected.has(it.videoId))
+      .map((it) => effectiveFor(it));
     try {
       const res = await fetch(`/api/party/${code}/bulk-add`, {
         method: "POST",
@@ -111,11 +240,7 @@ export default function ImportPlaylist({
         body: JSON.stringify({
           userId: getUserId(),
           addedBy: getDisplayName() || "Anonymous",
-          items: picks.map((p) => ({
-            videoId: p.videoId,
-            title: p.title,
-            thumbnail: p.thumbnail,
-          })),
+          items: picks,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -133,6 +258,10 @@ export default function ImportPlaylist({
       setFlash(parts.join(" · "));
       setItems(null);
       setSelected(new Set());
+      setMatches(new Map());
+      setKeepOriginal(new Set());
+      setMatchProgress({ done: 0, total: 0 });
+      matchGen.current += 1;
       setRaw("");
     } catch {
       setError("Network error — try again?");
@@ -147,6 +276,15 @@ export default function ImportPlaylist({
       (it) => !bannedIds.has(it.videoId) && !queuedIds.has(it.videoId),
     ).length;
   }, [items, bannedIds, queuedIds]);
+
+  const matchCount = useMemo(() => {
+    let n = 0;
+    for (const v of matches.values()) if (v) n++;
+    return n;
+  }, [matches]);
+
+  const matching =
+    matchProgress.total > 0 && matchProgress.done < matchProgress.total;
 
   return (
     <div className="card p-3">
@@ -198,7 +336,7 @@ export default function ImportPlaylist({
 
           {items && items.length > 0 ? (
             <>
-              <div className="flex items-center justify-between text-xs text-white/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/60">
                 <span>
                   {selected.size} of {items.length} selected
                   {eligibleCount < items.length ? (
@@ -226,12 +364,40 @@ export default function ImportPlaylist({
                   </button>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={matchEnabled}
+                  onChange={(e) => setMatchEnabled(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-brand-500"
+                />
+                <span>
+                  Upgrade to music videos when found
+                  {matching ? (
+                    <span className="text-white/40">
+                      {" "}
+                      · matching {matchProgress.done}/{matchProgress.total}…
+                    </span>
+                  ) : matchProgress.total > 0 ? (
+                    <span className="text-white/40">
+                      {" "}
+                      · found {matchCount} music video{matchCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+
               <ul className="max-h-[50vh] space-y-2 overflow-auto">
                 {items.map((r) => {
                   const banned = bannedIds.has(r.videoId);
                   const queued = queuedIds.has(r.videoId);
                   const disabled = banned || queued;
                   const checked = selected.has(r.videoId);
+                  const match = matches.get(r.videoId) ?? null;
+                  const usingMatch =
+                    !!match && matchEnabled && !keepOriginal.has(r.videoId);
+                  const shown = usingMatch && match ? match : r;
                   const badge = banned
                     ? "Banned"
                     : queued
@@ -241,7 +407,7 @@ export default function ImportPlaylist({
                     <li
                       key={r.videoId}
                       className={
-                        "flex items-center gap-2 rounded-md p-2 " +
+                        "flex items-start gap-2 rounded-md p-2 " +
                         (disabled
                           ? "bg-white/[0.03] opacity-60"
                           : "bg-white/5 hover:bg-white/10")
@@ -252,22 +418,38 @@ export default function ImportPlaylist({
                         checked={checked}
                         disabled={disabled}
                         onChange={() => toggle(r.videoId)}
-                        className="h-4 w-4 flex-shrink-0 accent-brand-500"
+                        className="mt-1 h-4 w-4 flex-shrink-0 accent-brand-500"
                       />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={r.thumbnail}
+                        src={shown.thumbnail}
                         alt=""
                         className="h-8 w-14 flex-shrink-0 rounded object-cover"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-xs leading-snug break-words">
-                          {r.title}
+                          {shown.title}
                         </div>
                         <div className="truncate text-[11px] text-white/50">
-                          {r.channelTitle}
-                          {r.duration ? ` · ${r.duration}` : ""}
+                          {shown.channelTitle}
+                          {shown.duration ? ` · ${shown.duration}` : ""}
                         </div>
+                        {match && matchEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleUseOriginal(r.videoId)}
+                            className="mt-1 text-[11px] text-brand-300 underline-offset-2 hover:underline"
+                            title={
+                              usingMatch
+                                ? `Original: ${r.title}`
+                                : `Music video: ${match.title}`
+                            }
+                          >
+                            {usingMatch
+                              ? "🎬 Music video · use original"
+                              : "↺ Using original · use music video"}
+                          </button>
+                        ) : null}
                       </div>
                       {badge ? (
                         <span className="flex-shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70">
