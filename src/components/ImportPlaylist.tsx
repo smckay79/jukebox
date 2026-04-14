@@ -11,6 +11,10 @@ interface PreviewItem {
   thumbnail: string;
   duration?: string;
   durationSeconds?: number;
+  // Filled in by the server from videos.list regionRestriction; when false
+  // we flag the row and exclude it from the default selection.
+  available?: boolean;
+  unavailableReason?: string;
 }
 
 interface MatchCandidate {
@@ -66,6 +70,10 @@ export default function ImportPlaylist({
   // videoId of originals the user explicitly wants to keep as-is (even
   // though a match was found). Default behavior: use the match if present.
   const [keepOriginal, setKeepOriginal] = useState<Set<string>>(new Set());
+  // Two-letter country code the server used to evaluate regionRestriction.
+  // Shown inline on the "N unavailable in your region" line so the host
+  // knows which country we checked against.
+  const [region, setRegion] = useState<string | null>(null);
 
   // A ref + generation counter so we can cancel a match pass when the user
   // loads a different playlist mid-flight.
@@ -98,10 +106,16 @@ export default function ImportPlaylist({
         return;
       }
       const results = (data as { results?: PreviewItem[] }).results ?? [];
+      const reg = (data as { region?: string }).region ?? null;
       setItems(results);
+      setRegion(reg);
       const next = new Set<string>();
       for (const r of results) {
-        if (!bannedIds.has(r.videoId) && !queuedIds.has(r.videoId)) {
+        if (
+          !bannedIds.has(r.videoId) &&
+          !queuedIds.has(r.videoId) &&
+          r.available !== false
+        ) {
           next.add(r.videoId);
         }
       }
@@ -187,7 +201,11 @@ export default function ImportPlaylist({
     if (!items) return;
     const next = new Set<string>();
     for (const r of items) {
-      if (!bannedIds.has(r.videoId) && !queuedIds.has(r.videoId)) {
+      if (
+        !bannedIds.has(r.videoId) &&
+        !queuedIds.has(r.videoId) &&
+        r.available !== false
+      ) {
         next.add(r.videoId);
       }
     }
@@ -273,9 +291,17 @@ export default function ImportPlaylist({
   const eligibleCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
-      (it) => !bannedIds.has(it.videoId) && !queuedIds.has(it.videoId),
+      (it) =>
+        !bannedIds.has(it.videoId) &&
+        !queuedIds.has(it.videoId) &&
+        it.available !== false,
     ).length;
   }, [items, bannedIds, queuedIds]);
+
+  const unavailableCount = useMemo(() => {
+    if (!items) return 0;
+    return items.filter((it) => it.available === false).length;
+  }, [items]);
 
   const matchCount = useMemo(() => {
     let n = 0;
@@ -339,10 +365,20 @@ export default function ImportPlaylist({
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/60">
                 <span>
                   {selected.size} of {items.length} selected
-                  {eligibleCount < items.length ? (
+                  {unavailableCount > 0 ? (
+                    <span className="text-amber-300/80">
+                      {" "}
+                      · {unavailableCount} not available
+                      {region ? ` in ${region}` : ""}
+                    </span>
+                  ) : null}
+                  {eligibleCount <
+                  items.length - unavailableCount ? (
                     <span className="text-white/40">
                       {" "}
-                      · {items.length - eligibleCount} unavailable
+                      ·{" "}
+                      {items.length - eligibleCount - unavailableCount}{" "}
+                      already queued or banned
                     </span>
                   ) : null}
                 </span>
@@ -392,7 +428,8 @@ export default function ImportPlaylist({
                 {items.map((r) => {
                   const banned = bannedIds.has(r.videoId);
                   const queued = queuedIds.has(r.videoId);
-                  const disabled = banned || queued;
+                  const unavailable = r.available === false;
+                  const disabled = banned || queued || unavailable;
                   const checked = selected.has(r.videoId);
                   const match = matches.get(r.videoId) ?? null;
                   const usingMatch =
@@ -402,7 +439,9 @@ export default function ImportPlaylist({
                     ? "Banned"
                     : queued
                       ? "Already queued"
-                      : null;
+                      : unavailable
+                        ? (r.unavailableReason ?? "Unavailable")
+                        : null;
                   return (
                     <li
                       key={r.videoId}
@@ -452,7 +491,20 @@ export default function ImportPlaylist({
                         ) : null}
                       </div>
                       {badge ? (
-                        <span className="flex-shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70">
+                        <span
+                          className={
+                            "flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] " +
+                            (unavailable
+                              ? "bg-amber-500/20 text-amber-200"
+                              : "bg-white/10 text-white/70")
+                          }
+                          title={
+                            unavailable
+                              ? `This video isn't playable in ${region ?? "your region"}.`
+                              : undefined
+                          }
+                        >
+                          {unavailable ? "🌐 " : ""}
                           {badge}
                         </span>
                       ) : null}

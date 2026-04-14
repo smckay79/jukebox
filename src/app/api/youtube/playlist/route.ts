@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkRegionRestriction, getClientRegion } from "@/lib/region";
 import { parsePlaylistId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -20,6 +21,11 @@ interface PreviewItem {
   thumbnail: string;
   durationSeconds?: number;
   duration?: string;
+  // Computed from videos.list regionRestriction + the host's detected
+  // country. When false, the client shows a "Blocked in XX" badge and
+  // auto-excludes the item from the default selection.
+  available?: boolean;
+  unavailableReason?: string;
 }
 
 export async function GET(req: Request) {
@@ -121,8 +127,15 @@ export async function GET(req: Request) {
       if (!pageToken) break;
     }
 
-    // Enrich with durations in batches of 50 (the videos.list max).
+    // Enrich with durations + regionRestriction in batches of 50 (the
+    // videos.list max). contentDetails covers both fields so we pay only
+    // 1 quota unit per batch either way.
+    const region = getClientRegion(req);
     const durations = new Map<string, { seconds: number; formatted: string }>();
+    const availability = new Map<
+      string,
+      { available: boolean; reason?: string }
+    >();
     for (let i = 0; i < items.length; i += 50) {
       const chunk = items.slice(i, i + 50).map((x) => x.videoId);
       const qs = new URLSearchParams({
@@ -136,25 +149,52 @@ export async function GET(req: Request) {
       );
       if (!vr.ok) continue; // non-fatal; preview just won't show duration
       const vd = (await vr.json()) as {
-        items?: Array<{ id?: string; contentDetails?: { duration?: string } }>;
+        items?: Array<{
+          id?: string;
+          contentDetails?: {
+            duration?: string;
+            regionRestriction?: { allowed?: string[]; blocked?: string[] };
+          };
+        }>;
       };
       for (const v of vd.items ?? []) {
         const iso = v.contentDetails?.duration ?? "";
         const s = parseISODuration(iso);
-        if (v.id) durations.set(v.id, { seconds: s, formatted: fmt(s) });
+        if (v.id) {
+          durations.set(v.id, { seconds: s, formatted: fmt(s) });
+          availability.set(
+            v.id,
+            checkRegionRestriction(v.contentDetails?.regionRestriction, region),
+          );
+        }
+      }
+      // videos.list omits items that are fully unavailable (private, deleted,
+      // or sometimes region-blocked from the server's own location). Mark
+      // those explicitly so the preview flags them instead of silently
+      // leaving them selectable.
+      for (const id of chunk) {
+        if (!availability.has(id)) {
+          availability.set(id, {
+            available: false,
+            reason: "Not available",
+          });
+        }
       }
     }
 
     const preview: PreviewItem[] = items.map((it) => {
       const d = durations.get(it.videoId);
+      const a = availability.get(it.videoId);
       return {
         ...it,
         durationSeconds: d?.seconds,
         duration: d?.formatted,
+        available: a?.available ?? true,
+        unavailableReason: a?.available === false ? a.reason : undefined,
       };
     });
 
-    return NextResponse.json({ playlistId, results: preview });
+    return NextResponse.json({ playlistId, region, results: preview });
   } catch {
     return NextResponse.json(
       { error: "Playlist import failed" },
