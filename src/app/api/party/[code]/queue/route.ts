@@ -14,6 +14,10 @@ export async function POST(
     videoId?: string;
     addedBy?: string;
     userId?: string;
+    // Optional, only trusted as a UX hint when adding from search results —
+    // we sanitize length but don't re-verify against YouTube.
+    title?: string;
+    thumbnail?: string;
   } = {};
   try {
     body = await req.json();
@@ -35,10 +39,20 @@ export async function POST(
   }
   const addedBy = (body.addedBy ?? "Anonymous").toString().slice(0, 40);
 
-  const meta = (await fetchVideoMeta(videoId)) ?? {
-    title: "YouTube video",
-    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-  };
+  // If the caller already has metadata (e.g. came via /api/search), skip the
+  // oEmbed roundtrip. Otherwise resolve title/thumbnail on the server.
+  const providedTitle = (body.title ?? "").toString().trim().slice(0, 200);
+  const providedThumb = (body.thumbnail ?? "").toString().trim().slice(0, 500);
+  const meta = providedTitle
+    ? {
+        title: providedTitle,
+        thumbnail:
+          providedThumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      }
+    : (await fetchVideoMeta(videoId)) ?? {
+        title: "YouTube video",
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      };
 
   const result = await addSong(params.code, {
     videoId,

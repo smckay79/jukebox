@@ -52,11 +52,40 @@ Open http://localhost:3000.
   serverless because cold starts + multiple instances mean state is not
   shared.
 
+## Enabling YouTube search
+
+Guests can paste URLs with zero configuration. To also let them
+search-as-you-type for videos, add a **YouTube Data API v3** key:
+
+1. Google Cloud Console → **APIs & Services → Library** → enable
+   **YouTube Data API v3**.
+2. **Credentials → Create credentials → API key**. Restrict it:
+   - Application restrictions → **HTTP referrers** → add your Vercel
+     domains (e.g. `https://jukebox-delta-three.vercel.app/*` and any
+     preview `*.vercel.app`).
+   - API restrictions → **YouTube Data API v3** only.
+3. Vercel project → **Settings → Environment Variables** → add
+   `YOUTUBE_API_KEY`. Apply to Production, Preview, and Development.
+4. Redeploy.
+
+Without the env var, `/api/search` returns 503 and the client cleanly
+falls back to URL-paste mode.
+
+### Quota notes
+
+`search.list` costs **100 quota units** per call; `videos.list` (for
+durations) costs **1**. With the default 10,000-unit daily quota that's
+~99 searches/day across the whole app. Each query is cached in-memory
+for 5 minutes to cut repeat costs during a single party.
+
 ## Local dev without Redis
 
 `npm run dev` works with no env vars — the store uses an in-memory `Map` on
 the dev server, which is fine for a single Node process. For production,
 follow the Deploy to Vercel steps above to hook up Upstash.
+
+For local search testing, create `.env.local` with
+`YOUTUBE_API_KEY=<your key>`. That file is gitignored.
 
 ## How it works
 
