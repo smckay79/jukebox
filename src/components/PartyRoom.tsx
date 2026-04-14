@@ -22,6 +22,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // QR is for inviting friends; hide by default on mobile (where the guest
   // already joined), and let hosts show it explicitly on the TV tab.
   const [showQR, setShowQR] = useState(false);
+  // Mobile video playback is opt-in — guests are usually just queueing songs
+  // and don't want to burn mobile data on an iframe. When toggled on we
+  // swap the compact now-playing card for a real (smaller) Player.
+  const [showMobileVideo, setShowMobileVideo] = useState(false);
   // Presenter / fullscreen mode — triggered by the host for TV casting.
   // We fullscreen only the player-cluster (video + QR overlay + up-next
   // strip + marquee) instead of the whole document so the iframe never
@@ -306,6 +310,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
+            className="btn-ghost text-sm md:hidden"
+            onClick={() => setShowMobileVideo((v) => !v)}
+          >
+            {showMobileVideo ? "Hide video" : "Show video"}
+          </button>
+          <button
             className="btn-ghost text-sm"
             onClick={() => setShowQR((v) => !v)}
           >
@@ -322,14 +332,44 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         </div>
       </header>
 
-      {/* Mobile: compact now-playing up top, then search, then queue. */}
+      {/* Mobile: compact now-playing up top, then search, then queue. The
+          real video player is opt-in via the header toggle — when on, we
+          render a scaled-down Player in place of the compact card. */}
       <div className="space-y-4 md:hidden">
-        <NowPlayingCompact
-          song={party.nowPlaying}
-          isAdmin={isAdmin}
-          onSkip={onSkip}
-          onBan={onBan}
-        />
+        {showMobileVideo ? (
+          <div className="mx-auto w-full max-w-xs space-y-2">
+            <Player
+              song={party.nowPlaying}
+              onEnded={onEnded}
+              partyCode={party.code}
+            />
+            {isAdmin && party.nowPlaying ? (
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={onSkip}
+                  className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium hover:bg-brand-500"
+                  title="Skip"
+                >
+                  Skip
+                </button>
+                <button
+                  onClick={() => party.nowPlaying && onBan(party.nowPlaying)}
+                  className="rounded-md bg-red-600/80 px-2 py-1 text-xs font-medium hover:bg-red-500"
+                  title="Ban this song from the party"
+                >
+                  Ban
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <NowPlayingCompact
+            song={party.nowPlaying}
+            isAdmin={isAdmin}
+            onSkip={onSkip}
+            onBan={onBan}
+          />
+        )}
         <Marquee text={party.marquee} />
         <AddSong
           code={party.code}
