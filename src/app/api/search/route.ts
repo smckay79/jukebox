@@ -3,12 +3,26 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// YouTube Data API `search.list` costs 100 quota units; `videos.list` costs 1.
-// Free daily quota is 10,000 → ~99 searches/day untrimmed. A small in-memory
-// cache keeps repeated queries cheap during a single party.
+// YouTube search flow:
+//   1) If a YOUTUBE_API_KEY is configured, try the official Data API first
+//      (best results quality + duration metadata). `search.list` is 100 quota
+//      units so 10k default tier = ~99 searches/day; each `videos.list` is 1.
+//   2) On quotaExceeded / keyInvalid / etc., or if no key is set at all,
+//      fall through to YouTube's own public web-client "innertube" search
+//      endpoint. No key, no quota — but unofficial and could change without
+//      notice. Acceptable as a fallback; not as the primary.
+//   3) Short in-memory cache keeps repeats cheap either way.
+//
+// When the Data API reports quota exhaustion we remember it for
+// QUOTA_COOLDOWN_MS so we don't keep hitting a wall Google has already said
+// is up.
+
 const cache = new Map<string, { at: number; data: SearchResult[] }>();
 const CACHE_MS = 5 * 60 * 1000;
 const CACHE_MAX = 500;
+
+const QUOTA_COOLDOWN_MS = 15 * 60 * 1000;
+let quotaExhaustedUntil = 0;
 
 interface SearchResult {
   videoId: string;
@@ -20,14 +34,6 @@ interface SearchResult {
 }
 
 export async function GET(req: Request) {
-  const key = process.env.YOUTUBE_API_KEY;
-  if (!key) {
-    return NextResponse.json(
-      { error: "Search not configured" },
-      { status: 503 },
-    );
-  }
-
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   if (!q) return NextResponse.json({ results: [] });
   if (q.length > 100) {
@@ -40,6 +46,87 @@ export async function GET(req: Request) {
     return NextResponse.json({ results: hit.data });
   }
 
+  const key = process.env.YOUTUBE_API_KEY;
+  let results: SearchResult[] | null = null;
+  let source: "data-api" | "innertube" = "data-api";
+
+  // ---- 1) Official Data API (if we have a key and aren't in cooldown) ----
+  if (key && Date.now() >= quotaExhaustedUntil) {
+    const dataApi = await searchViaDataApi(q, key);
+    if (dataApi.ok) {
+      results = dataApi.results;
+    } else if (dataApi.fallbackable) {
+      // quotaExceeded / keyInvalid / accessNotConfigured / etc. — fall
+      // through to innertube silently. The host sees search keep working;
+      // the server logs carry the detail.
+      if (
+        dataApi.reason === "quotaExceeded" ||
+        dataApi.reason === "dailyLimitExceeded"
+      ) {
+        quotaExhaustedUntil = Date.now() + QUOTA_COOLDOWN_MS;
+      }
+      source = "innertube";
+    } else {
+      // Non-fallbackable (e.g. our own bug, unexpected HTTP 500): return the
+      // friendly message and don't poke innertube.
+      return NextResponse.json(
+        {
+          error:
+            friendlySearchError(dataApi.reason) ?? "YouTube search failed",
+          reason: dataApi.reason,
+        },
+        { status: dataApi.reason === "quotaExceeded" ? 429 : 502 },
+      );
+    }
+  } else {
+    source = "innertube";
+  }
+
+  // ---- 2) InnerTube fallback ----
+  if (!results) {
+    try {
+      results = await searchViaInnertube(q);
+    } catch (err) {
+      console.error("[search] innertube fallback failed", err);
+      return NextResponse.json(
+        {
+          error:
+            key && quotaExhaustedUntil > Date.now()
+              ? "YouTube search is out of daily quota — try pasting a link until tomorrow."
+              : "Search failed — try pasting a link instead.",
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  // ---- 3) Rank + cache + respond ----
+  const ranked = results
+    .map((r, i) => ({ r, i, s: officialBoost(r.title) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map(({ r }) => r);
+
+  if (cache.size > CACHE_MAX) {
+    const entries = [...cache.entries()].sort((a, b) => a[1].at - b[1].at);
+    for (let i = 0; i < Math.floor(CACHE_MAX / 2); i++) {
+      cache.delete(entries[i][0]);
+    }
+  }
+  cache.set(ck, { at: Date.now(), data: ranked });
+
+  return NextResponse.json({ results: ranked, source });
+}
+
+// ---------- Data API path ----------
+
+type DataApiOutcome =
+  | { ok: true; results: SearchResult[] }
+  | { ok: false; fallbackable: boolean; reason: string | null };
+
+async function searchViaDataApi(
+  q: string,
+  key: string,
+): Promise<DataApiOutcome> {
   try {
     const searchUrl =
       `https://www.googleapis.com/youtube/v3/search` +
@@ -47,23 +134,17 @@ export async function GET(req: Request) {
       `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`;
     const sr = await fetch(searchUrl, { cache: "no-store" });
     if (!sr.ok) {
-      // Surface Google's reason so the host can see whether it's quota
-      // exhaustion (common on the free tier — resets at midnight Pacific),
-      // a disabled/unauthorized key, or an HTTP-referrer restriction that
-      // doesn't match this deployment.
       const detail = await readGoogleError(sr);
-      console.error("[search] youtube search failed", {
+      console.error("[search] data api search.list failed", {
         status: sr.status,
         reason: detail.reason,
         message: detail.message,
       });
-      return NextResponse.json(
-        {
-          error: friendlySearchError(detail.reason) ?? "YouTube search failed",
-          reason: detail.reason,
-        },
-        { status: detail.reason === "quotaExceeded" ? 429 : 502 },
-      );
+      return {
+        ok: false,
+        fallbackable: isFallbackableReason(detail.reason),
+        reason: detail.reason,
+      };
     }
     const sd = (await sr.json()) as { items?: YTSearchItem[] };
     const items = sd.items ?? [];
@@ -71,7 +152,6 @@ export async function GET(req: Request) {
       .map((it) => it.id?.videoId)
       .filter((x): x is string => !!x);
 
-    // Enrich with durations in a single cheap call.
     const durationById = new Map<
       string,
       { seconds: number; formatted: string }
@@ -90,10 +170,8 @@ export async function GET(req: Request) {
           if (v.id) durationById.set(v.id, { seconds: s, formatted: fmt(s) });
         }
       } else {
-        // Non-fatal: UI just won't show durations. Still log so a totally
-        // dead key is visible in the server output.
         const detail = await readGoogleError(vr);
-        console.error("[search] youtube videos.list failed", {
+        console.error("[search] data api videos.list failed", {
           status: vr.status,
           reason: detail.reason,
           message: detail.message,
@@ -121,35 +199,164 @@ export async function GET(req: Request) {
         };
       })
       .filter((x): x is SearchResult => x !== null);
-
-    // Boost "Official Video" / "Official Music Video" over everything else,
-    // then "Official Audio", then plain "Official". Stable within ties so
-    // YouTube's own relevance order is preserved for same-score results.
-    const ranked = results
-      .map((r, i) => ({ r, i, s: officialBoost(r.title) }))
-      .sort((a, b) => (b.s - a.s) || (a.i - b.i))
-      .map(({ r }) => r);
-
-    if (cache.size > CACHE_MAX) {
-      // Drop the oldest half in one pass; good enough LRU for our scale.
-      const entries = [...cache.entries()].sort(
-        (a, b) => a[1].at - b[1].at,
-      );
-      for (let i = 0; i < Math.floor(CACHE_MAX / 2); i++) {
-        cache.delete(entries[i][0]);
-      }
-    }
-    return NextResponse.json({ results: ranked });
+    return { ok: true, results };
   } catch (err) {
-    console.error("[search] unexpected error", err);
-    return NextResponse.json({ error: "Search failed" }, { status: 500 });
+    console.error("[search] data api threw", err);
+    return { ok: false, fallbackable: true, reason: null };
   }
 }
 
-// Google's error envelope is `{ error: { code, message, errors: [{ reason }] }}`.
-// We pull out the first reason (e.g. "quotaExceeded", "keyInvalid",
-// "ipRefererBlocked", "accessNotConfigured") plus a short human message so
-// the server log shows what broke without dumping the whole payload.
+// ---------- InnerTube fallback ----------
+
+// The public API key baked into YouTube's web client. Anyone can see it in a
+// browser devtools request; it authorizes only the innertube endpoint.
+const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const INNERTUBE_CLIENT_VERSION = "2.20241212.01.00";
+// `params` filters the result set. "EgIQAQ%3D%3D" = videos only (not
+// channels, playlists, or shorts-only mixes).
+const INNERTUBE_VIDEOS_ONLY = "EgIQAQ%3D%3D";
+
+async function searchViaInnertube(q: string): Promise<SearchResult[]> {
+  const res = await fetch(
+    `https://www.youtube.com/youtubei/v1/search?prettyPrint=false&key=${INNERTUBE_KEY}`,
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        // Pretending to be a desktop web client so YouTube hands back the
+        // structure we know how to parse below.
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+          "(KHTML, like Gecko) Chrome/122.0 Safari/537.36",
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: INNERTUBE_CLIENT_VERSION,
+            hl: "en",
+            gl: "US",
+          },
+        },
+        query: q,
+        params: INNERTUBE_VIDEOS_ONLY,
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`innertube HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as InnertubeSearchResponse;
+  return parseInnertubeResults(data).slice(0, 8);
+}
+
+interface InnertubeRuns {
+  runs?: Array<{ text?: string }>;
+  simpleText?: string;
+}
+interface InnertubeThumbnail {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+interface InnertubeVideoRenderer {
+  videoId?: string;
+  title?: InnertubeRuns;
+  longBylineText?: InnertubeRuns;
+  ownerText?: InnertubeRuns;
+  shortBylineText?: InnertubeRuns;
+  lengthText?: InnertubeRuns;
+  thumbnail?: { thumbnails?: InnertubeThumbnail[] };
+}
+interface InnertubeContent {
+  videoRenderer?: InnertubeVideoRenderer;
+  itemSectionRenderer?: { contents?: InnertubeContent[] };
+  sectionListRenderer?: { contents?: InnertubeContent[] };
+  twoColumnSearchResultsRenderer?: {
+    primaryContents?: { sectionListRenderer?: { contents?: InnertubeContent[] } };
+  };
+}
+interface InnertubeSearchResponse {
+  contents?: InnertubeContent;
+}
+
+function readRuns(r: InnertubeRuns | undefined): string {
+  if (!r) return "";
+  if (r.simpleText) return r.simpleText;
+  if (r.runs) return r.runs.map((x) => x.text ?? "").join("");
+  return "";
+}
+
+// Walk the nested `contents` tree and collect every videoRenderer we find.
+// Innertube changes the exact shape from time to time; recursion keeps us
+// robust to extra wrapping renderers like shelfRenderer.
+function collectVideoRenderers(
+  node: unknown,
+  out: InnertubeVideoRenderer[],
+): void {
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (obj.videoRenderer) {
+    out.push(obj.videoRenderer as InnertubeVideoRenderer);
+  }
+  for (const v of Object.values(obj)) {
+    if (Array.isArray(v)) {
+      for (const x of v) collectVideoRenderers(x, out);
+    } else if (v && typeof v === "object") {
+      collectVideoRenderers(v, out);
+    }
+  }
+}
+
+function parseInnertubeResults(
+  data: InnertubeSearchResponse,
+): SearchResult[] {
+  const renderers: InnertubeVideoRenderer[] = [];
+  collectVideoRenderers(data.contents, renderers);
+  const out: SearchResult[] = [];
+  for (const v of renderers) {
+    const id = v.videoId;
+    if (!id) continue;
+    const title = readRuns(v.title);
+    if (!title) continue;
+    const channel = readRuns(
+      v.longBylineText ?? v.ownerText ?? v.shortBylineText,
+    );
+    const durStr = readRuns(v.lengthText);
+    const seconds = parseClockDuration(durStr);
+    const thumbs = v.thumbnail?.thumbnails ?? [];
+    // Prefer the widest thumbnail ≤ 336px (mqdefault size) so the UI stays
+    // crisp without pulling a huge image.
+    const pick =
+      thumbs.find((t) => (t.width ?? 0) >= 320 && (t.width ?? 0) <= 360) ??
+      thumbs[thumbs.length - 1] ??
+      { url: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` };
+    out.push({
+      videoId: id,
+      title,
+      channelTitle: channel,
+      thumbnail: pick.url ?? `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+      duration: durStr || undefined,
+      durationSeconds: seconds || undefined,
+    });
+  }
+  return out;
+}
+
+// "3:45" / "1:23:45" → seconds. Returns 0 for unparseable input (e.g. live).
+function parseClockDuration(s: string): number {
+  if (!s) return 0;
+  const parts = s.split(":").map((x) => parseInt(x, 10));
+  if (parts.some((n) => !Number.isFinite(n))) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 1) return parts[0];
+  return 0;
+}
+
+// ---------- shared helpers ----------
+
 async function readGoogleError(
   res: Response,
 ): Promise<{ reason: string | null; message: string }> {
@@ -171,8 +378,27 @@ async function readGoogleError(
   }
 }
 
-// Map the most common Google reasons to a message the host can actually act
-// on. Everything else falls through to the generic "YouTube search failed".
+// Reasons we're comfortable silently falling back on — they all mean "the
+// Data API won't answer us right now" rather than "the user asked for
+// something nonsensical".
+function isFallbackableReason(reason: string | null): boolean {
+  if (!reason) return true;
+  return [
+    "quotaExceeded",
+    "dailyLimitExceeded",
+    "rateLimitExceeded",
+    "userRateLimitExceeded",
+    "keyInvalid",
+    "keyExpired",
+    "keyRevoked",
+    "accessNotConfigured",
+    "ipRefererBlocked",
+    "forbidden",
+    "backendError",
+    "internalError",
+  ].includes(reason);
+}
+
 function friendlySearchError(reason: string | null): string | null {
   switch (reason) {
     case "quotaExceeded":
@@ -194,8 +420,6 @@ function friendlySearchError(reason: string | null): string | null {
   }
 }
 
-// Scoring: official-video always wins, then official-audio, then plain
-// "official". Lyric videos go below plain to push them down without hiding.
 function officialBoost(title: string): number {
   const t = title.toLowerCase();
   if (/official\s+(music\s+)?video/.test(t)) return 3;
@@ -205,8 +429,6 @@ function officialBoost(title: string): number {
   if (/lyric(s)?\s+video|lyric\s+video/.test(t)) return -1;
   return 0;
 }
-
-// ---------- helpers ----------
 
 interface YTSearchItem {
   id?: { videoId?: string };
@@ -226,7 +448,6 @@ interface YTVideoItem {
   contentDetails?: { duration?: string };
 }
 
-// "PT3M45S" / "PT1H2M3S" → seconds. Returns 0 for unparseable input.
 function parseISODuration(iso: string): number {
   const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
   if (!m) return 0;
