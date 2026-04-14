@@ -279,9 +279,21 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         ) : null}
       </div>
 
-      {/* Desktop/TV: full player + side column. */}
-      <div className="hidden gap-6 md:grid md:grid-cols-[1fr_360px]">
+      {/* Desktop/TV: search at top (dropdown overlays the video below), then
+          full player, then queue. Side column collapses when QR is hidden so
+          the video can fill the width — ideal for casting to a TV. */}
+      <div
+        className={
+          "hidden gap-6 md:grid " +
+          (showQR ? "md:grid-cols-[1fr_360px]" : "md:grid-cols-1")
+        }
+      >
         <section className="space-y-4">
+          <AddSong
+            code={party.code}
+            onAdded={setParty}
+            bannedIds={bannedIds}
+          />
           <Player song={party.nowPlaying} onEnded={onEnded} />
           {isAdmin ? (
             <div className="flex justify-end">
@@ -295,11 +307,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               </button>
             </div>
           ) : null}
-          <AddSong
-            code={party.code}
-            onAdded={setParty}
-            bannedIds={bannedIds}
-          />
           <div>
             <h2 className="mb-2 text-lg font-semibold">
               Up next{" "}
@@ -316,29 +323,40 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onBan={isAdmin ? onBan : undefined}
             />
           </div>
-        </section>
-        <aside className="space-y-4">
-          {showQR ? <QRCard code={party.code} /> : null}
-          {isAdmin ? (
-            <>
-              <div className="card p-4 text-sm text-white/70">
-                <div className="mb-1 font-semibold text-white">
-                  You&apos;re the host
-                </div>
-                <p>
-                  Keep this tab open on the TV. Share the QR or the code{" "}
-                  <span className="font-mono text-white">{party.code}</span>{" "}
-                  with your friends so they can add songs.
-                </p>
-              </div>
-              <BannedList
-                banned={party.banned}
-                onUnban={onUnban}
-                onBanUrl={onBanUrl}
-              />
-            </>
+          {/* When QR is hidden the admin tools move inline below the queue
+              instead of sitting in a side column. */}
+          {!showQR && isAdmin ? (
+            <BannedList
+              banned={party.banned}
+              onUnban={onUnban}
+              onBanUrl={onBanUrl}
+            />
           ) : null}
-        </aside>
+        </section>
+        {showQR ? (
+          <aside className="space-y-4">
+            <QRCard code={party.code} />
+            {isAdmin ? (
+              <>
+                <div className="card p-4 text-sm text-white/70">
+                  <div className="mb-1 font-semibold text-white">
+                    You&apos;re the host
+                  </div>
+                  <p>
+                    Keep this tab open on the TV. Share the QR or the code{" "}
+                    <span className="font-mono text-white">{party.code}</span>{" "}
+                    with your friends so they can add songs.
+                  </p>
+                </div>
+                <BannedList
+                  banned={party.banned}
+                  onUnban={onUnban}
+                  onBanUrl={onBanUrl}
+                />
+              </>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
     </main>
   );

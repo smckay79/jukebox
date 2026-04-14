@@ -23,16 +23,34 @@ export default function AddSong({
   bannedIds?: Set<string>;
 }) {
   const [name, setName] = useState("");
+  const [editingName, setEditingName] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchAvailable, setSearchAvailable] = useState(true);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const rootRef = useRef<HTMLFormElement | null>(null);
 
+  // Prefill name from localStorage. If nothing saved, open the name field so
+  // the first-time user can enter one before adding a song.
   useEffect(() => {
-    setName(getDisplayName());
+    const saved = getDisplayName();
+    setName(saved);
+    if (!saved) setEditingName(true);
+  }, []);
+
+  // Dismiss the results dropdown on outside click so it doesn't sit over the
+  // video forever after the user picks something else to do.
+  useEffect(() => {
+    function onDocDown(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setFocused(false);
+    }
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
   }, []);
 
   const trimmed = query.trim();
@@ -88,7 +106,10 @@ export default function AddSong({
   ) {
     setError(null);
     setAddingId(videoId);
-    if (name.trim()) setDisplayName(name.trim());
+    if (name.trim()) {
+      setDisplayName(name.trim());
+      setEditingName(false);
+    }
     try {
       const res = await fetch(`/api/party/${code}/queue`, {
         method: "POST",
@@ -109,6 +130,7 @@ export default function AddSong({
       onAdded(data.party as PublicParty);
       setQuery("");
       setResults([]);
+      setFocused(false);
     } catch {
       setError("Network error — try again?");
     } finally {
@@ -139,33 +161,69 @@ export default function AddSong({
     );
   }
 
-  return (
-    <form onSubmit={onSubmit} className="card space-y-3 p-4">
-      <div>
-        <label className="mb-1 block text-sm text-white/70">Your name</label>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="input"
-          placeholder="Anonymous"
-          maxLength={40}
-        />
-      </div>
+  const showDropdown =
+    focused &&
+    !urlVideoId &&
+    (loading || results.length > 0 || !!error);
 
-      <div>
-        <label className="mb-1 block text-sm text-white/70">
-          {searchAvailable
-            ? "Search YouTube or paste a link"
-            : "Paste a YouTube link"}
-        </label>
+  return (
+    <form ref={rootRef} onSubmit={onSubmit} className="relative">
+      <div className="card space-y-2 p-3">
+        {editingName ? (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs text-white/70">
+                Your name
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                placeholder="Anonymous"
+                maxLength={40}
+                autoFocus
+              />
+            </div>
+            {name.trim() ? (
+              <button
+                type="button"
+                className="btn-ghost !py-2 text-sm"
+                onClick={() => {
+                  setDisplayName(name.trim());
+                  setEditingName(false);
+                }}
+              >
+                Save
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-xs text-white/60">
+            <span>
+              Adding as{" "}
+              <span className="font-medium text-white">
+                {name || "Anonymous"}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="text-white/50 underline-offset-2 hover:text-white hover:underline"
+              onClick={() => setEditingName(true)}
+            >
+              Not you?
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
             placeholder={
               searchAvailable
-                ? "e.g. daft punk one more time"
-                : "https://youtu.be/…"
+                ? "Search YouTube or paste a link"
+                : "Paste a YouTube link"
             }
             className="input flex-1"
             autoComplete="off"
@@ -181,70 +239,78 @@ export default function AddSong({
             </button>
           ) : null}
         </div>
-        {error ? (
-          <p className="mt-2 text-sm text-red-400">{error}</p>
-        ) : null}
       </div>
 
-      {loading ? (
-        <div className="text-sm text-white/50">Searching…</div>
-      ) : null}
-
-      {!urlVideoId && results.length > 0 ? (
-        <ul className="space-y-2" role="listbox">
-          {results.map((r) => {
-            const banned = bannedIds?.has(r.videoId) ?? false;
-            return (
-              <li
-                key={r.videoId}
-                className={
-                  "flex items-center gap-3 rounded-lg p-2 " +
-                  (banned
-                    ? "bg-red-950/40 opacity-60"
-                    : "bg-white/5 hover:bg-white/10")
-                }
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={r.thumbnail}
-                  alt=""
-                  className="h-12 w-20 flex-shrink-0 rounded object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium leading-snug break-words">
-                    {r.title}
-                  </div>
-                  <div className="mt-0.5 truncate text-xs text-white/50">
-                    {r.channelTitle}
-                    {r.duration ? ` · ${r.duration}` : ""}
-                  </div>
-                </div>
-                {banned ? (
-                  <span
-                    className="rounded-md bg-red-600/50 px-2 py-1 text-xs font-medium"
-                    title="This video is banned from the party"
-                  >
-                    Banned
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-ghost !px-3 !py-1 text-sm"
-                    disabled={addingId === r.videoId}
-                    onClick={() =>
-                      addVideo(r.videoId, {
-                        title: r.title,
-                        thumbnail: r.thumbnail,
-                      })
+      {showDropdown ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 card max-h-[70vh] overflow-auto p-2 shadow-xl">
+          {loading ? (
+            <div className="p-2 text-sm text-white/50">Searching…</div>
+          ) : null}
+          {error ? (
+            <p className="p-2 text-sm text-red-400">{error}</p>
+          ) : null}
+          {results.length > 0 ? (
+            <ul className="space-y-2" role="listbox">
+              {results.map((r) => {
+                const banned = bannedIds?.has(r.videoId) ?? false;
+                return (
+                  <li
+                    key={r.videoId}
+                    className={
+                      "flex items-center gap-3 rounded-lg p-2 " +
+                      (banned
+                        ? "bg-red-950/40 opacity-60"
+                        : "bg-white/5 hover:bg-white/10")
                     }
                   >
-                    {addingId === r.videoId ? "…" : "Add"}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={r.thumbnail}
+                      alt=""
+                      className="h-12 w-20 flex-shrink-0 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium leading-snug break-words">
+                        {r.title}
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-white/50">
+                        {r.channelTitle}
+                        {r.duration ? ` · ${r.duration}` : ""}
+                      </div>
+                    </div>
+                    {banned ? (
+                      <span
+                        className="rounded-md bg-red-600/50 px-2 py-1 text-xs font-medium"
+                        title="This video is banned from the party"
+                      >
+                        Banned
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-3 !py-1 text-sm"
+                        disabled={addingId === r.videoId}
+                        onClick={() =>
+                          addVideo(r.videoId, {
+                            title: r.title,
+                            thumbnail: r.thumbnail,
+                          })
+                        }
+                      >
+                        {addingId === r.videoId ? "…" : "Add"}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Inline error when the dropdown is closed (e.g. URL add failure). */}
+      {error && !showDropdown ? (
+        <p className="mt-2 text-sm text-red-400">{error}</p>
       ) : null}
     </form>
   );
