@@ -82,7 +82,12 @@ export default function AddSong({
           return;
         }
         if (!res.ok) {
-          setError("Search failed — try pasting a link instead.");
+          const data = (await res
+            .json()
+            .catch(() => ({}))) as { error?: string };
+          setError(
+            data.error ?? "Search failed — try pasting a link instead.",
+          );
           setResults([]);
           return;
         }

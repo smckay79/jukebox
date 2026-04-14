@@ -47,9 +47,22 @@ export async function GET(req: Request) {
       `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`;
     const sr = await fetch(searchUrl, { cache: "no-store" });
     if (!sr.ok) {
+      // Surface Google's reason so the host can see whether it's quota
+      // exhaustion (common on the free tier — resets at midnight Pacific),
+      // a disabled/unauthorized key, or an HTTP-referrer restriction that
+      // doesn't match this deployment.
+      const detail = await readGoogleError(sr);
+      console.error("[search] youtube search failed", {
+        status: sr.status,
+        reason: detail.reason,
+        message: detail.message,
+      });
       return NextResponse.json(
-        { error: "YouTube search failed" },
-        { status: 502 },
+        {
+          error: friendlySearchError(detail.reason) ?? "YouTube search failed",
+          reason: detail.reason,
+        },
+        { status: detail.reason === "quotaExceeded" ? 429 : 502 },
       );
     }
     const sd = (await sr.json()) as { items?: YTSearchItem[] };
@@ -76,6 +89,15 @@ export async function GET(req: Request) {
           const s = parseISODuration(iso);
           if (v.id) durationById.set(v.id, { seconds: s, formatted: fmt(s) });
         }
+      } else {
+        // Non-fatal: UI just won't show durations. Still log so a totally
+        // dead key is visible in the server output.
+        const detail = await readGoogleError(vr);
+        console.error("[search] youtube videos.list failed", {
+          status: vr.status,
+          reason: detail.reason,
+          message: detail.message,
+        });
       }
     }
 
@@ -118,8 +140,57 @@ export async function GET(req: Request) {
       }
     }
     return NextResponse.json({ results: ranked });
-  } catch {
+  } catch (err) {
+    console.error("[search] unexpected error", err);
     return NextResponse.json({ error: "Search failed" }, { status: 500 });
+  }
+}
+
+// Google's error envelope is `{ error: { code, message, errors: [{ reason }] }}`.
+// We pull out the first reason (e.g. "quotaExceeded", "keyInvalid",
+// "ipRefererBlocked", "accessNotConfigured") plus a short human message so
+// the server log shows what broke without dumping the whole payload.
+async function readGoogleError(
+  res: Response,
+): Promise<{ reason: string | null; message: string }> {
+  try {
+    const body = (await res.json()) as {
+      error?: {
+        message?: string;
+        errors?: Array<{ reason?: string; message?: string }>;
+      };
+    };
+    const e = body.error ?? {};
+    const first = e.errors?.[0];
+    return {
+      reason: first?.reason ?? null,
+      message: e.message ?? first?.message ?? `HTTP ${res.status}`,
+    };
+  } catch {
+    return { reason: null, message: `HTTP ${res.status}` };
+  }
+}
+
+// Map the most common Google reasons to a message the host can actually act
+// on. Everything else falls through to the generic "YouTube search failed".
+function friendlySearchError(reason: string | null): string | null {
+  switch (reason) {
+    case "quotaExceeded":
+    case "dailyLimitExceeded":
+    case "rateLimitExceeded":
+    case "userRateLimitExceeded":
+      return "YouTube search is out of daily quota — try pasting a link until tomorrow.";
+    case "keyInvalid":
+    case "keyExpired":
+    case "keyRevoked":
+    case "badRequest":
+      return "Search key is invalid. Paste YouTube links directly for now.";
+    case "accessNotConfigured":
+      return "YouTube Data API isn't enabled for this key.";
+    case "ipRefererBlocked":
+      return "Search key's referrer restrictions don't allow this site.";
+    default:
+      return null;
   }
 }
 
