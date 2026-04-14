@@ -211,7 +211,9 @@ export default function AddSong({
                   className="h-12 w-20 flex-shrink-0 rounded object-cover"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{r.title}</div>
+                  <div className="text-sm font-medium leading-snug break-words">
+                    {r.title}
+                  </div>
                   <div className="mt-0.5 truncate text-xs text-white/50">
                     {r.channelTitle}
                     {r.duration ? ` · ${r.duration}` : ""}
