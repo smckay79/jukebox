@@ -43,7 +43,9 @@ export default function Queue({
               className="h-14 w-24 flex-shrink-0 rounded object-cover"
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{song.title}</div>
+              <div className="font-medium leading-snug break-words">
+                {song.title}
+              </div>
               <div className="mt-0.5 text-xs text-white/50">
                 Added by {song.addedBy}
               </div>
