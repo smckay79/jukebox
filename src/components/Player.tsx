@@ -59,10 +59,14 @@ export default function Player({
   song,
   onEnded,
   partyCode,
+  fill,
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
   partyCode?: string;
+  // Edge-to-edge mode for presenter/fullscreen: drops the card chrome and
+  // song-info footer and lets the video fill the parent.
+  fill?: boolean;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -125,8 +129,18 @@ export default function Player({
   }, [song]);
 
   return (
-    <div className="card overflow-hidden">
-      <div className="relative aspect-video w-full bg-black">
+    <div
+      className={
+        fill ? "h-full w-full bg-black" : "card overflow-hidden"
+      }
+    >
+      <div
+        className={
+          fill
+            ? "relative h-full w-full bg-black"
+            : "relative aspect-video w-full bg-black"
+        }
+      >
         {song ? (
           <div ref={mountRef} className="h-full w-full" />
         ) : (
@@ -142,7 +156,7 @@ export default function Player({
           </div>
         ) : null}
       </div>
-      {song ? (
+      {!fill && song ? (
         <div className="flex items-center gap-3 px-4 py-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

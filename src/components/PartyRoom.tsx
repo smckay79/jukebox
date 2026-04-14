@@ -21,8 +21,43 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // QR is for inviting friends; hide by default on mobile (where the guest
   // already joined), and let hosts show it explicitly on the TV tab.
   const [showQR, setShowQR] = useState(false);
+  // Presenter / fullscreen mode — triggered by the host for TV casting.
+  // We fullscreen only the player-cluster (video + QR overlay + up-next
+  // strip + marquee) instead of the whole document so the iframe never
+  // needs to remount.
+  const presenterRef = useRef<HTMLDivElement | null>(null);
+  const [presenterMode, setPresenterMode] = useState(false);
   const partyRef = useRef(party);
   partyRef.current = party;
+
+  useEffect(() => {
+    const onFs = () => {
+      setPresenterMode(
+        !!document.fullscreenElement &&
+          document.fullscreenElement === presenterRef.current,
+      );
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  async function enterPresenter() {
+    const el = presenterRef.current;
+    if (!el || !el.requestFullscreen) return;
+    try {
+      await el.requestFullscreen();
+    } catch {
+      /* user dismissed or browser blocked — nothing to do */
+    }
+  }
+
+  async function exitPresenter() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     setUserId(getUserId());
@@ -316,12 +351,74 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onAdded={setParty}
             bannedIds={bannedIds}
           />
-          <Player
-            song={party.nowPlaying}
-            onEnded={onEnded}
-            partyCode={party.code}
-          />
-          <Marquee text={party.marquee} />
+          <div
+            ref={presenterRef}
+            className={
+              presenterMode
+                ? "flex h-full w-full flex-col bg-black"
+                : "space-y-3"
+            }
+          >
+            <div
+              className={
+                presenterMode
+                  ? "relative min-h-0 flex-1 bg-black"
+                  : ""
+              }
+            >
+              <Player
+                song={party.nowPlaying}
+                onEnded={onEnded}
+                partyCode={party.code}
+                fill={presenterMode}
+              />
+            </div>
+
+            {/* Compact up-next strip shown only while fullscreened so the
+                crowd can see what's queued without the full queue list. */}
+            {presenterMode && party.queue[0] ? (
+              <div className="flex items-center gap-3 bg-black/80 px-4 py-2 text-white">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
+                  Up next
+                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={party.queue[0].thumbnail}
+                  alt=""
+                  className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                />
+                <div className="min-w-0 flex-1 truncate">
+                  {party.queue[0].title}
+                </div>
+                <span className="flex-shrink-0 text-xs text-white/50">
+                  Added by {party.queue[0].addedBy}
+                </span>
+              </div>
+            ) : null}
+
+            <Marquee text={party.marquee} />
+
+            <div className={presenterMode ? "flex justify-center bg-black/80 py-2" : "flex justify-between gap-2"}>
+              {!presenterMode ? (
+                <button
+                  type="button"
+                  className="btn-ghost text-sm"
+                  onClick={enterPresenter}
+                  title="Expand the video to fill the screen (Esc to exit)"
+                >
+                  <span aria-hidden>⛶</span> Fullscreen
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-ghost text-sm"
+                  onClick={exitPresenter}
+                >
+                  Exit fullscreen
+                </button>
+              )}
+            </div>
+          </div>
           {isAdmin ? (
             <div className="flex justify-end">
               <button
