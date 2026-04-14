@@ -446,7 +446,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               {!presenterMode ? (
                 <button
                   type="button"
-                  className="btn-ghost text-sm"
+                  className="btn-primary"
                   onClick={enterPresenter}
                   title="Expand the video to fill the screen (Esc to exit)"
                 >
