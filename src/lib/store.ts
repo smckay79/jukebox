@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { getRedis } from "./kv";
 import { publishPartyUpdate } from "./pubsub";
-import type { BannedVideo, Party, PublicParty, Song } from "./types";
+import type { BannedVideo, Party, PartyTheme, PublicParty, Song } from "./types";
 
 // Seeded on every new party. Other bans get added live by the admin.
 const DEFAULT_BANS: BannedVideo[] = [
@@ -131,6 +131,7 @@ export function toPublicParty(p: Party): PublicParty {
     queue: sortQueue(p.queue),
     nowPlaying: p.nowPlaying,
     banned: p.banned ?? [],
+    theme: p.theme,
   };
 }
 
@@ -339,6 +340,47 @@ export async function unbanVideo(
   if (party.banned.length === before) {
     return { ok: false, error: "Not in ban list" };
   }
+  await persist(party);
+  return { ok: true, party };
+}
+
+// Passing `null` clears the theme. Custom images are expected to be
+// already-resized data URLs; we cap stored length to keep Redis values sane.
+const MAX_THEME_IMAGE_LEN = 600_000; // ~450KB base64 → ~340KB binary
+
+export async function setTheme(
+  code: string,
+  theme: PartyTheme | null,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  if (theme === null) {
+    party.theme = undefined;
+  } else {
+    const clean: PartyTheme = {};
+    if (typeof theme.era === "string" && theme.era) {
+      clean.era = theme.era.slice(0, 20);
+    }
+    if (typeof theme.genre === "string" && theme.genre) {
+      clean.genre = theme.genre.slice(0, 20);
+    }
+    if (typeof theme.seed === "number" && Number.isFinite(theme.seed)) {
+      clean.seed = Math.floor(theme.seed);
+    }
+    if (typeof theme.customImage === "string" && theme.customImage) {
+      if (theme.customImage.length > MAX_THEME_IMAGE_LEN) {
+        return { ok: false, error: "Image is too large — try a smaller file." };
+      }
+      if (!theme.customImage.startsWith("data:image/")) {
+        return { ok: false, error: "Unsupported image" };
+      }
+      clean.customImage = theme.customImage;
+    }
+    party.theme = clean;
+  }
+
   await persist(party);
   return { ok: true, party };
 }

@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddSong from "./AddSong";
+import Background from "./Background";
 import BannedList from "./BannedList";
 import NowPlayingCompact from "./NowPlayingCompact";
 import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
+import ThemePicker from "./ThemePicker";
 import { getAdminKey, getUserId } from "@/lib/identity";
-import type { PublicParty, Song } from "@/lib/types";
+import type { PartyTheme, PublicParty, Song } from "@/lib/types";
 
 export default function PartyRoom({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
@@ -201,6 +203,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "ban", url: raw });
   }
 
+  async function onSetTheme(theme: PartyTheme | null): Promise<string | null> {
+    return adminPost({ action: "theme", theme });
+  }
+
   const isAdmin = !!adminKey;
 
   const bannedIds = useMemo(
@@ -209,7 +215,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">
+    <>
+      <Background theme={party.theme} />
+      <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-6">
         <div className="min-w-0">
           <Link
@@ -271,11 +279,14 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         </div>
         {showQR ? <QRCard code={party.code} /> : null}
         {isAdmin ? (
-          <BannedList
-            banned={party.banned}
-            onUnban={onUnban}
-            onBanUrl={onBanUrl}
-          />
+          <>
+            <ThemePicker theme={party.theme} onApply={onSetTheme} />
+            <BannedList
+              banned={party.banned}
+              onUnban={onUnban}
+              onBanUrl={onBanUrl}
+            />
+          </>
         ) : null}
       </div>
 
@@ -326,11 +337,14 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           {/* When QR is hidden the admin tools move inline below the queue
               instead of sitting in a side column. */}
           {!showQR && isAdmin ? (
-            <BannedList
-              banned={party.banned}
-              onUnban={onUnban}
-              onBanUrl={onBanUrl}
-            />
+            <>
+              <ThemePicker theme={party.theme} onApply={onSetTheme} />
+              <BannedList
+                banned={party.banned}
+                onUnban={onUnban}
+                onBanUrl={onBanUrl}
+              />
+            </>
           ) : null}
         </section>
         {showQR ? (
@@ -348,6 +362,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     with your friends so they can add songs.
                   </p>
                 </div>
+                <ThemePicker theme={party.theme} onApply={onSetTheme} />
                 <BannedList
                   banned={party.banned}
                   onUnban={onUnban}
@@ -358,6 +373,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           </aside>
         ) : null}
       </div>
-    </main>
+      </main>
+    </>
   );
 }

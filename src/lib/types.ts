@@ -16,6 +16,16 @@ export interface BannedVideo {
   bannedAt: number;
 }
 
+// Era / genre pair drives a procedurally-generated wallpaper. `customImage`
+// (a data URL, resized client-side) takes precedence over the procedural one
+// when set, so hosts can drop in a party photo.
+export interface PartyTheme {
+  era?: string;
+  genre?: string;
+  seed?: number;
+  customImage?: string;
+}
+
 export interface Party {
   code: string; // public join code
   adminKey: string; // secret, only creator holds
@@ -25,6 +35,7 @@ export interface Party {
   nowPlaying: Song | null;
   history: Song[]; // played songs
   banned: BannedVideo[];
+  theme?: PartyTheme;
 }
 
 export interface PublicParty {
@@ -34,4 +45,5 @@ export interface PublicParty {
   queue: Song[];
   nowPlaying: Song | null;
   banned: BannedVideo[];
+  theme?: PartyTheme;
 }

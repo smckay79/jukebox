@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import {
   banVideo,
   removeSong,
+  setTheme,
   skipCurrent,
   toPublicParty,
   unbanVideo,
   verifyAdmin,
 } from "@/lib/store";
+import type { PartyTheme } from "@/lib/types";
 import { fetchVideoMeta, parseYouTubeId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -35,6 +37,7 @@ export async function POST(
     url?: string;
     title?: string;
     thumbnail?: string;
+    theme?: PartyTheme | null;
   } = {};
   try {
     body = await req.json();
@@ -97,6 +100,15 @@ export async function POST(
       return NextResponse.json({ error: "Missing videoId" }, { status: 400 });
     }
     const res = await unbanVideo(params.code, videoId);
+    if (!res.ok) {
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "theme") {
+    const res = await setTheme(params.code, body.theme ?? null);
     if (!res.ok) {
       const status = res.error === "Party not found" ? 404 : 400;
       return NextResponse.json({ error: res.error }, { status });
