@@ -165,6 +165,25 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   }
 
   async function onEnded(videoId: string) {
+    // Optimistically advance the local party state so the Player loads the
+    // next song immediately — before the server round-trip — cutting the
+    // window in which YouTube shows its "more videos" end screen to near
+    // zero. The server response below is authoritative and will correct
+    // anything that raced with a concurrent admin action.
+    setParty((p) => {
+      if (!p.nowPlaying || p.nowPlaying.videoId !== videoId) return p;
+      const sorted = [...p.queue].sort((a, b) =>
+        b.votes.length !== a.votes.length
+          ? b.votes.length - a.votes.length
+          : a.addedAt - b.addedAt,
+      );
+      const next = sorted[0] ?? null;
+      return {
+        ...p,
+        nowPlaying: next,
+        queue: next ? p.queue.filter((s) => s.id !== next.id) : p.queue,
+      };
+    });
     try {
       const res = await fetch(`/api/party/${party.code}/ended`, {
         method: "POST",
@@ -398,7 +417,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
             <Marquee text={party.marquee} />
 
-            <div className={presenterMode ? "flex justify-center bg-black/80 py-2" : "flex justify-between gap-2"}>
+            <div
+              className={
+                presenterMode
+                  ? "flex items-center justify-center gap-2 bg-black/80 py-2"
+                  : "flex gap-2"
+              }
+            >
               {!presenterMode ? (
                 <button
                   type="button"
@@ -409,13 +434,26 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                   <span aria-hidden>⛶</span> Fullscreen
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="btn-ghost text-sm"
-                  onClick={exitPresenter}
-                >
-                  Exit fullscreen
-                </button>
+                <>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="btn-primary !px-3 !py-1.5 text-sm"
+                      onClick={onSkip}
+                      disabled={!party.nowPlaying}
+                      title="Skip current track"
+                    >
+                      Skip ▶▶
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn-ghost !px-3 !py-1.5 text-sm"
+                    onClick={exitPresenter}
+                  >
+                    Exit fullscreen
+                  </button>
+                </>
               )}
             </div>
           </div>
