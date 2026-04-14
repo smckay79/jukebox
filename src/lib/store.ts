@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import { getRedis } from "./kv";
+import { publishPartyUpdate } from "./pubsub";
 import type { Party, PublicParty, Song } from "./types";
 
 // ---------- storage backends ----------
@@ -61,6 +62,14 @@ function storage(): Storage {
     storageInstance = getRedis() ? new RedisStorage() : new MemoryStorage();
   }
   return storageInstance;
+}
+
+// Every successful write goes through this so live viewers (SSE subscribers)
+// see updates without waiting for their safety-net poll.
+async function persist(party: Party): Promise<void> {
+  await storage().set(party);
+  // Best-effort: publish failure is not fatal, the poll will fill the gap.
+  await publishPartyUpdate(party.code, toPublicParty(party));
 }
 
 // ---------- helpers ----------
@@ -135,7 +144,7 @@ export async function createParty(name: string): Promise<Party> {
     nowPlaying: null,
     history: [],
   };
-  await s.set(party);
+  await persist(party);
   return party;
 }
 
@@ -177,7 +186,7 @@ export async function addSong(
   };
   party.queue.push(song);
   if (!party.nowPlaying) promoteNext(party);
-  await s.set(party);
+  await persist(party);
   return { ok: true, song, party };
 }
 
@@ -205,7 +214,7 @@ export async function voteSong(
     song.votes.splice(idx, 1);
     voted = false;
   }
-  await s.set(party);
+  await persist(party);
   return { ok: true, votes: song.votes.length, voted, party };
 }
 
@@ -222,7 +231,7 @@ export async function removeSong(
   if (party.queue.length === before) {
     return { ok: false, error: "Song not found" };
   }
-  await s.set(party);
+  await persist(party);
   return { ok: true, party };
 }
 
@@ -236,7 +245,7 @@ export async function skipCurrent(
   if (party.nowPlaying) party.history.push(party.nowPlaying);
   party.nowPlaying = null;
   promoteNext(party);
-  await s.set(party);
+  await persist(party);
   return { ok: true, party };
 }
 
@@ -255,7 +264,7 @@ export async function songEnded(
   party.history.push(party.nowPlaying);
   party.nowPlaying = null;
   promoteNext(party);
-  await s.set(party);
+  await persist(party);
   return { ok: true, party };
 }
 

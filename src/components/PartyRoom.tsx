@@ -36,18 +36,53 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     }
   }, [party.code]);
 
-  // Poll every 3s. Roadmap: swap for websockets / Supabase realtime.
+  // Real-time updates via Server-Sent Events; the server pushes a new
+  // `PublicParty` payload on every write. EventSource auto-reconnects on
+  // connection drop (e.g. when Vercel cuts the function at its max
+  // duration). A slow 30s poll runs alongside as a safety net in case
+  // Redis pub/sub is unavailable or a publish is dropped.
   useEffect(() => {
-    const id = setInterval(refresh, 3000);
+    let es: EventSource | null = null;
+    let cancelled = false;
+
+    const open = () => {
+      if (cancelled) return;
+      try {
+        es = new EventSource(`/api/party/${party.code}/stream`);
+      } catch {
+        return;
+      }
+      es.onmessage = (ev) => {
+        try {
+          const next = JSON.parse(ev.data) as PublicParty;
+          setParty(next);
+        } catch {
+          /* ignore malformed frame */
+        }
+      };
+      es.onerror = () => {
+        // Browser will auto-retry, but close to be explicit if something
+        // went wrong server-side and let it reopen cleanly.
+        es?.close();
+        es = null;
+        if (!cancelled) setTimeout(open, 2000);
+      };
+    };
+    open();
+
+    const poll = setInterval(refresh, 30_000);
     const onVis = () => {
       if (document.visibilityState === "visible") refresh();
     };
     document.addEventListener("visibilitychange", onVis);
+
     return () => {
-      clearInterval(id);
+      cancelled = true;
+      es?.close();
+      clearInterval(poll);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [refresh]);
+  }, [party.code, refresh]);
 
   async function onVote(song: Song) {
     // optimistic

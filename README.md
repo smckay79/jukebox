@@ -44,6 +44,10 @@ Open http://localhost:3000.
 - If `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or the `UPSTASH_REDIS_REST_*`
   equivalents) are set → **Upstash Redis**. Parties are stored as JSON with
   a 7-day TTL.
+- If `KV_URL` (or `REDIS_URL`) is set, the app also opens a TCP
+  connection and uses Redis pub/sub to push live updates to connected
+  clients via SSE (`/api/party/<code>/stream`). The Vercel Upstash
+  integration sets all three automatically.
 - Otherwise → **in-memory `Map`**. Fine for `npm run dev`; broken on
   serverless because cold starts + multiple instances mean state is not
   shared.
