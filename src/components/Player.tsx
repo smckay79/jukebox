@@ -89,8 +89,17 @@ export default function Player({
           playerVars: {
             autoplay: 1,
             playsinline: 1,
+            // Hide in-video cards / annotations and limit the "related"
+            // rail shown when YouTube thinks it needs to. `rel=0` now only
+            // constrains related videos to the same channel — end screens
+            // are additionally sidestepped by our onStateChange handler
+            // advancing to the next queued song immediately on state 0.
             rel: 0,
             modestbranding: 1,
+            iv_load_policy: 3, // disable annotations
+            cc_load_policy: 0, // don't force captions
+            disablekb: 1, // no stray keyboard shortcuts
+            fs: 0, // hide fullscreen button (TV is already full)
           },
           events: {
             onStateChange: (e) => {

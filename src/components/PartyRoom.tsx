@@ -269,6 +269,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           onSkip={onSkip}
           onBan={onBan}
         />
+        <Marquee text={party.marquee} />
         <AddSong
           code={party.code}
           onAdded={setParty}
@@ -320,6 +321,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onEnded={onEnded}
             partyCode={party.code}
           />
+          <Marquee text={party.marquee} />
           {isAdmin ? (
             <div className="flex justify-end">
               <button
@@ -384,7 +386,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         ) : null}
       </div>
       </main>
-      <Marquee text={party.marquee} />
     </>
   );
 }

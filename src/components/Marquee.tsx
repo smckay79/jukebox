@@ -1,15 +1,14 @@
 "use client";
 
-// Scrolling ticker fixed to the bottom of the viewport. Doubled text in
-// the animation so the loop joins seamlessly without a visible reset.
-// Hidden on mobile since it's meant for the TV cast; guests already see
-// party info in the compact layout.
+// Scrolling ticker that sits inline below the video. Doubled text in the
+// animation so the loop joins seamlessly without a visible reset. Caller
+// controls placement; returns null when the host hasn't set a message.
 export default function Marquee({ text }: { text?: string }) {
   if (!text) return null;
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-20 hidden overflow-hidden border-t border-white/10 bg-black/70 py-2 backdrop-blur md:block"
-      aria-hidden
+      className="overflow-hidden rounded-xl border border-white/10 bg-black/60 py-2 backdrop-blur"
+      aria-label="Party message"
     >
       <div
         className="whitespace-nowrap font-medium tracking-wide text-white/90"
