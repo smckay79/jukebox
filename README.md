@@ -159,6 +159,20 @@ durations) costs **1**. With the default 10,000-unit daily quota that's
 ~99 searches/day across the whole app. Each query is cached in-memory
 for 5 minutes to cut repeat costs during a single party.
 
+## Android / Fire TV player app (optional)
+
+A companion WebView app lives under `android/` that turns any Android
+phone, Android TV, or Fire TV into a dedicated display for a party. It
+targets the `/party/<code>/display` route — a chrome-free render of the
+player, up-next strip, marquee, and join QR — so the TV just shows
+what the crowd needs and the host drives everything from their phone
+as usual.
+
+Full build + install instructions (JDK 17 + Gradle 8.9 + adb) are in
+[`android/README.md`](./android/README.md). The app has no API
+dependency beyond the already-public `/api/party/<code>`, SSE stream,
+and `/ended` endpoints — no admin key, no sign-in.
+
 ## Local dev without Redis
 
 `npm run dev` works with no env vars — the store uses an in-memory `Map` on

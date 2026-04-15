@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320x180 vector banner for the Android TV / Fire TV home row. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#1A0B2E"
+        android:pathData="M0,0h320v180h-320z" />
+    <!-- Rough turntable / record silhouette, centered. -->
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M160,40a50,50 0 1,0 0.1,0z" />
+    <path
+        android:fillColor="#1A0B2E"
+        android:pathData="M160,75a15,15 0 1,0 0.1,0z" />
+    <path
+        android:fillColor="#F5F3FF"
+        android:pathData="M100,140h120v4h-120z" />
+</vector>
