@@ -128,6 +128,13 @@ it lands in the queue.
    - No redirect URI / scopes are needed — the server uses the
      [Client Credentials flow](https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow),
      which only reads public playlist metadata.
+   - **Important:** the Spotify account that owns this developer app must
+     have an active **Spotify Premium** subscription. Spotify started
+     enforcing this in 2025 — playlist endpoints return `403 "Active
+     premium subscription required for the owner of the app."` when the
+     owner is on a Free account. If you don't have Premium, use a
+     teammate's Premium account to create the app, or skip the Spotify
+     tab entirely (the YouTube flow works without any Spotify config).
 2. Vercel project → **Settings → Environment Variables**:
    - `SPOTIFY_CLIENT_ID` — required.
    - `SPOTIFY_CLIENT_SECRET` — required.
@@ -135,6 +142,15 @@ it lands in the queue.
 
 Without both env vars the Spotify tab returns a 503 "not configured"
 message; the YouTube flow keeps working normally.
+
+**Known Spotify API limits** (not fixable on our end):
+- **Editorial / algorithmic playlists** (owned by the `spotify` user —
+  Today's Top Hits, Discover Weekly, Daily Mix, etc.) are blocked from
+  Client Credentials since late 2024 and will 403.
+- **Blend and Collaborative playlists** use private permission models
+  and 403 regardless of the share-link visibility.
+- **Private playlists** require per-user OAuth, which this app doesn't
+  implement.
 
 ### Quota notes
 

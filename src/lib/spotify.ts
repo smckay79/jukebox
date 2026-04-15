@@ -193,9 +193,21 @@ export async function fetchSpotifyPlaylist(
       };
     }
     if (metaRes.status === 403) {
+      // Spotify added a rule (~2025) that the Spotify account that owns
+      // the developer app must have an active Premium subscription,
+      // otherwise every playlist-endpoint call 403s with this exact
+      // message. Detect it and surface a specific fix-it note so the
+      // host doesn't waste time checking playlist visibility.
+      if (/premium subscription/i.test(body)) {
+        return {
+          error:
+            "Spotify requires the developer account that owns this app to have an active Premium subscription. Upgrade the Spotify account that holds SPOTIFY_CLIENT_ID, or swap in credentials from a Premium account.",
+          status: 400,
+        };
+      }
       return {
         error:
-          "Spotify refused to open that playlist. Make sure it's public or unlisted — private playlists aren't supported.",
+          "Spotify refused to open that playlist. Make sure it's public or unlisted — private and collaborative playlists aren't supported via the public API.",
         status: 400,
       };
     }
