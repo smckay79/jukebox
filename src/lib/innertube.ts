@@ -14,6 +14,10 @@ export interface InnertubeResult {
   thumbnail: string;
   duration?: string;
   durationSeconds?: number;
+  // True when the uploader has YouTube's "Official Artist Channel" badge
+  // (BADGE_STYLE_TYPE_VERIFIED_ARTIST) — strong signal that the upload is
+  // the real music video rather than a reupload or cover.
+  verifiedArtist?: boolean;
 }
 
 // The public API key baked into YouTube's web client. Visible in any
@@ -67,6 +71,13 @@ interface InnertubeThumbnail {
   width?: number;
   height?: number;
 }
+interface InnertubeBadge {
+  metadataBadgeRenderer?: {
+    style?: string;
+    label?: string;
+    tooltip?: string;
+  };
+}
 interface InnertubeVideoRenderer {
   videoId?: string;
   title?: InnertubeRuns;
@@ -75,6 +86,8 @@ interface InnertubeVideoRenderer {
   shortBylineText?: InnertubeRuns;
   lengthText?: InnertubeRuns;
   thumbnail?: { thumbnails?: InnertubeThumbnail[] };
+  badges?: InnertubeBadge[];
+  ownerBadges?: InnertubeBadge[];
 }
 interface InnertubeSearchResponse {
   contents?: unknown;
@@ -129,6 +142,7 @@ function parseInnertubeResults(
       thumbs.find((t) => (t.width ?? 0) >= 320 && (t.width ?? 0) <= 360) ??
       thumbs[thumbs.length - 1] ??
       { url: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` };
+    const verifiedArtist = hasVerifiedArtistBadge(v);
     out.push({
       videoId: id,
       title,
@@ -136,9 +150,22 @@ function parseInnertubeResults(
       thumbnail: pick.url ?? `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
       duration: durStr || undefined,
       durationSeconds: seconds || undefined,
+      verifiedArtist: verifiedArtist || undefined,
     });
   }
   return out;
+}
+
+// True if either the uploader's channel or the video itself carries
+// YouTube's "Official Artist Channel" badge — style token is stable even
+// as label text changes across locales.
+function hasVerifiedArtistBadge(v: InnertubeVideoRenderer): boolean {
+  const all = [...(v.ownerBadges ?? []), ...(v.badges ?? [])];
+  for (const b of all) {
+    const style = b.metadataBadgeRenderer?.style ?? "";
+    if (style === "BADGE_STYLE_TYPE_VERIFIED_ARTIST") return true;
+  }
+  return false;
 }
 
 // "3:45" / "1:23:45" → seconds. Returns 0 for unparseable input (e.g. live).
