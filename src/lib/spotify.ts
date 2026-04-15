@@ -160,21 +160,42 @@ export async function fetchSpotifyPlaylist(
   const headers = { authorization: `Bearer ${token}` };
 
   // First page also gives us the playlist name + the first ~100 tracks.
+  // Note: no `market` param. `from_token` only works with user OAuth
+  // tokens (not Client Credentials), and hard-coding a market would
+  // filter out tracks unavailable in that country. The YouTube match
+  // step handles regional availability downstream.
   const metaRes = await fetch(
-    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?market=from_token&fields=${encodeURIComponent(
+    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=${encodeURIComponent(
       "id,name,tracks.items(track(id,name,duration_ms,is_local,type,artists(name),album(name,images))),tracks.next",
     )}`,
     { headers, cache: "no-store" },
   );
   if (!metaRes.ok) {
+    // Log the full error body so operator-facing logs include the
+    // Spotify reason (e.g. "Non existing id" vs "Insufficient client
+    // scope"). The client still sees a friendly message.
+    const body = await metaRes.text().catch(() => "");
+    console.error(
+      "[spotify] playlist fetch failed",
+      metaRes.status,
+      playlistId,
+      body.slice(0, 300),
+    );
     if (metaRes.status === 401) {
       // Invalidate the cached token so the next call refreshes it.
       getCache().current = null;
     }
-    if (metaRes.status === 404 || metaRes.status === 403) {
+    if (metaRes.status === 404) {
       return {
         error:
-          "Couldn't open that Spotify playlist. Make sure the link is public or unlisted.",
+          "Couldn't find that Spotify playlist. It may be private, region-locked, or an editorial/algorithmic playlist that Spotify no longer exposes to third-party apps.",
+        status: 400,
+      };
+    }
+    if (metaRes.status === 403) {
+      return {
+        error:
+          "Spotify refused to open that playlist. Make sure it's public or unlisted — private playlists aren't supported.",
         status: 400,
       };
     }
