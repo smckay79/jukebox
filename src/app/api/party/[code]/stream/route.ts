@@ -1,5 +1,7 @@
+import { randomBytes } from "crypto";
 import { getParty, toPublicParty } from "@/lib/store";
 import { channelFor, createSubscriber } from "@/lib/pubsub";
+import { dropViewer, touchViewer } from "@/lib/stats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +34,10 @@ export async function GET(
 
   const subscriber = createSubscriber();
   const channel = channelFor(code);
+  // Random per-connection id so we can track this tab's "live viewer" slot
+  // independent of userId (one user can have multiple tabs open). The slot
+  // expires on its own after 30s if heartbeats stop (browser crash, etc.).
+  const viewerId = randomBytes(8).toString("hex");
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -45,12 +51,20 @@ export async function GET(
         } catch {
           /* ignore */
         }
+        // Best-effort drop — also has a 30s TTL in stats storage so a
+        // missed drop won't leave phantom viewers.
+        dropViewer(code, viewerId).catch(() => {});
         try {
           controller.close();
         } catch {
           /* already closed */
         }
       };
+
+      // Register this viewer before anything else so the count reflects
+      // them immediately — and fire-and-forget since the write isn't
+      // critical to the stream working.
+      touchViewer(code, viewerId).catch(() => {});
 
       // 1) Push the current state immediately so the client is in sync on
       //    connect/reconnect (covers any updates it might have missed).
@@ -86,6 +100,9 @@ export async function GET(
         }
         try {
           controller.enqueue(sseComment("keepalive"));
+          // Extend viewer TTL alongside the keepalive — viewers expire
+          // after 30s of silence, heartbeat runs every 15s.
+          touchViewer(code, viewerId).catch(() => {});
         } catch {
           clearInterval(heartbeat);
           safeClose();

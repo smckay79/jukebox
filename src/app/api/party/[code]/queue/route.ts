@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addSong, toPublicParty } from "@/lib/store";
+import { getClientIp, isIpBanned, logActivity } from "@/lib/stats";
 import { fetchVideoMeta, parseYouTubeId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -39,6 +40,19 @@ export async function POST(
   }
   const addedBy = (body.addedBy ?? "Anonymous").toString().slice(0, 40);
 
+  // IP muted by the host? Reject with a message that tells the guest
+  // their ban lifts in an hour (the TTL we set in stats).
+  const ip = getClientIp(req);
+  if (await isIpBanned(params.code, ip)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your network is muted from adding songs at this party for an hour.",
+      },
+      { status: 403 },
+    );
+  }
+
   // If the caller already has metadata (e.g. came via /api/search), skip the
   // oEmbed roundtrip. Otherwise resolve title/thumbnail on the server.
   const providedTitle = (body.title ?? "").toString().trim().slice(0, 200);
@@ -65,6 +79,19 @@ export async function POST(
     const status = result.error === "Party not found" ? 404 : 400;
     return NextResponse.json({ error: result.error }, { status });
   }
+  // Fire-and-forget: admin stats panel relies on this log, but a failed
+  // write shouldn't block the user's successful add.
+  logActivity(params.code, [
+    {
+      at: Date.now(),
+      ip,
+      userId,
+      videoId,
+      title: result.song.title,
+      addedBy: result.song.addedBy,
+      kind: "single",
+    },
+  ]).catch(() => {});
   return NextResponse.json({
     song: result.song,
     party: toPublicParty(result.party),

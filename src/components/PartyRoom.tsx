@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddSong from "./AddSong";
+import AdminStats from "./AdminStats";
 import Background from "./Background";
 import BannedList from "./BannedList";
 import ImportPlaylist from "./ImportPlaylist";
@@ -434,12 +435,15 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           />
         </div>
         {showQR ? <QRCard code={party.code} /> : null}
-        {isAdmin ? (
-          <BannedList
-            banned={party.banned}
-            onUnban={onUnban}
-            onBanUrl={onBanUrl}
-          />
+        {isAdmin && adminKey ? (
+          <>
+            <AdminStats code={party.code} adminKey={adminKey} />
+            <BannedList
+              banned={party.banned}
+              onUnban={onUnban}
+              onBanUrl={onBanUrl}
+            />
+          </>
         ) : null}
       </div>
 
@@ -581,18 +585,21 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           </div>
           {/* When QR is hidden the admin tools move inline below the queue
               instead of sitting in a side column. */}
-          {!showQR && isAdmin ? (
-            <BannedList
-              banned={party.banned}
-              onUnban={onUnban}
-              onBanUrl={onBanUrl}
-            />
+          {!showQR && isAdmin && adminKey ? (
+            <>
+              <AdminStats code={party.code} adminKey={adminKey} />
+              <BannedList
+                banned={party.banned}
+                onUnban={onUnban}
+                onBanUrl={onBanUrl}
+              />
+            </>
           ) : null}
         </section>
         {showQR ? (
           <aside className="space-y-4">
             <QRCard code={party.code} />
-            {isAdmin ? (
+            {isAdmin && adminKey ? (
               <>
                 <div className="card p-4 text-sm text-white/70">
                   <div className="mb-1 font-semibold text-white">
@@ -604,6 +611,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     with your friends so they can add songs.
                   </p>
                 </div>
+                <AdminStats code={party.code} adminKey={adminKey} />
                 <BannedList
                   banned={party.banned}
                   onUnban={onUnban}

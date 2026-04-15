@@ -10,6 +10,7 @@ import {
   unbanVideo,
   verifyAdmin,
 } from "@/lib/store";
+import { banIp, unbanIp } from "@/lib/stats";
 import type { PartyTheme } from "@/lib/types";
 import { fetchVideoMeta, parseYouTubeId } from "@/lib/youtube";
 
@@ -41,6 +42,7 @@ export async function POST(
     thumbnail?: string;
     theme?: PartyTheme | null;
     marquee?: string;
+    ip?: string;
   } = {};
   try {
     body = await req.json();
@@ -135,6 +137,30 @@ export async function POST(
       return NextResponse.json({ error: res.error }, { status });
     }
     return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "banIp") {
+    const ip = (body.ip ?? "").toString().trim().slice(0, 64);
+    if (!ip) {
+      return NextResponse.json({ error: "Missing ip" }, { status: 400 });
+    }
+    const ban = await banIp(params.code, ip);
+    if (!ban) {
+      return NextResponse.json(
+        { error: "Can't ban an unknown IP" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ ban });
+  }
+
+  if (body.action === "unbanIp") {
+    const ip = (body.ip ?? "").toString().trim().slice(0, 64);
+    if (!ip) {
+      return NextResponse.json({ error: "Missing ip" }, { status: 400 });
+    }
+    await unbanIp(params.code, ip);
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
