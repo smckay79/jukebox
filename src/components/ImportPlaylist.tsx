@@ -42,10 +42,12 @@ export default function ImportPlaylist({
   code,
   bannedIds,
   onImported,
+  country,
 }: {
   code: string;
   bannedIds: Set<string>;
   onImported: (party: PublicParty) => void;
+  country?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
@@ -92,10 +94,11 @@ export default function ImportPlaylist({
     // sees the change and bails out.
     matchGen.current += 1;
     try {
-      const res = await fetch(
-        `/api/youtube/playlist?id=${encodeURIComponent(v)}`,
-        { cache: "no-store" },
-      );
+      const qs = new URLSearchParams({ id: v });
+      if (country) qs.set("country", country);
+      const res = await fetch(`/api/youtube/playlist?${qs.toString()}`, {
+        cache: "no-store",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(

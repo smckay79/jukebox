@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkRegionRestriction, getClientRegion } from "@/lib/region";
+import { checkRegionRestriction, resolveRegion } from "@/lib/region";
 import { parsePlaylistId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -39,6 +39,10 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const raw = (url.searchParams.get("id") ?? "").trim();
+  // Party's configured country (ISO alpha-2) wins over request-derived
+  // detection when supplied; lets the host preview what'll actually be
+  // playable at their party regardless of where the server happens to be.
+  const countryParam = (url.searchParams.get("country") ?? "").trim();
   if (!raw) {
     return NextResponse.json({ error: "Missing playlist" }, { status: 400 });
   }
@@ -130,7 +134,7 @@ export async function GET(req: Request) {
     // Enrich with durations + regionRestriction in batches of 50 (the
     // videos.list max). contentDetails covers both fields so we pay only
     // 1 quota unit per batch either way.
-    const region = getClientRegion(req);
+    const region = resolveRegion(req, countryParam || null);
     const durations = new Map<string, { seconds: number; formatted: string }>();
     const availability = new Map<
       string,

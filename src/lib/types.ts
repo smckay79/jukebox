@@ -62,6 +62,10 @@ export interface Party {
   // whenever the user queue is empty; user-added songs interrupt and take
   // priority. Absent = no background playlist set.
   playlist?: PartyPlaylist;
+  // ISO 3166-1 alpha-2 country code. When set, search results and playlist
+  // imports are filtered to videos playable in this country — overriding
+  // the auto-detected region from the request. Absent = use auto-detect.
+  country?: string;
 }
 
 export interface PublicParty {
@@ -77,4 +81,7 @@ export interface PublicParty {
   // background"), without shipping every item to every client on each SSE
   // frame.
   playlist?: { count: number; setAt: number };
+  // See Party.country — exposed so the admin settings menu can show the
+  // current selection, and so the guest client can attach it to search.
+  country?: string;
 }

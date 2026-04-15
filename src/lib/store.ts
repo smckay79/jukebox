@@ -143,6 +143,7 @@ export function toPublicParty(p: Party): PublicParty {
     playlist: p.playlist
       ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
       : undefined,
+    country: p.country,
   };
 }
 
@@ -520,6 +521,30 @@ export async function clearPartyPlaylist(
   if (isPlaylistTrack(party.nowPlaying)) {
     party.nowPlaying = null;
     promoteNext(party);
+  }
+  await persist(party);
+  return { ok: true, party };
+}
+
+// Pass `null` (or an empty string) to clear and fall back to auto-detection.
+// Anything else must be ISO 3166-1 alpha-2 — two letters, no digits — or we
+// reject. We don't validate against a specific list because YouTube may add
+// new regionCodes over time; the admin picker bounds the practical set.
+export async function setCountry(
+  code: string,
+  country: string | null,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (country === null || country === "") {
+    party.country = undefined;
+  } else {
+    const clean = country.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(clean)) {
+      return { ok: false, error: "Country must be a 2-letter code" };
+    }
+    party.country = clean;
   }
   await persist(party);
   return { ok: true, party };

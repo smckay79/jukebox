@@ -24,6 +24,17 @@ export function getClientRegion(req: Request): string {
   return "US";
 }
 
+// Pick the region to use for a request. Accepts an explicit preference (the
+// party's configured country) and only falls back to request-derived
+// detection when that's missing or malformed. Keeps the validation in one
+// place so callers don't have to remember the alpha-2 rule.
+export function resolveRegion(req: Request, preferred?: string | null): string {
+  if (preferred && /^[A-Za-z]{2}$/.test(preferred)) {
+    return preferred.toUpperCase();
+  }
+  return getClientRegion(req);
+}
+
 // Evaluate a regionRestriction block from YouTube's videos.list response
 // against our detected region. Returns `{ available: true }` when the video
 // will play, otherwise carries a short reason we can show the user.

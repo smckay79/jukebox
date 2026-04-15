@@ -17,10 +17,12 @@ export default function AddSong({
   code,
   onAdded,
   bannedIds,
+  country,
 }: {
   code: string;
   onAdded: (party: PublicParty) => void;
   bannedIds?: Set<string>;
+  country?: string;
 }) {
   const [name, setName] = useState("");
   const [editingName, setEditingName] = useState(false);
@@ -73,10 +75,11 @@ export default function AddSong({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(trimmed)}`,
-          { signal: ctl.signal },
-        );
+        const qs = new URLSearchParams({ q: trimmed });
+        if (country) qs.set("country", country);
+        const res = await fetch(`/api/search?${qs.toString()}`, {
+          signal: ctl.signal,
+        });
         if (res.status === 503) {
           setSearchAvailable(false);
           return;
@@ -103,7 +106,7 @@ export default function AddSong({
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [trimmed, urlVideoId, searchAvailable]);
+  }, [trimmed, urlVideoId, searchAvailable, country]);
 
   async function addVideo(
     videoId: string,

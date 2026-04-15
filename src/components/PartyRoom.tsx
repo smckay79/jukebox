@@ -272,6 +272,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "marquee", marquee: text });
   }
 
+  async function onSetCountry(next: string | null): Promise<string | null> {
+    return adminPost({ action: "country", country: next });
+  }
+
   async function onClearPlaylist() {
     const ok = confirm(
       "Clear the party playlist? Queued songs keep playing, but nothing will loop in the background.",
@@ -361,8 +365,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             <SettingsMenu
               theme={party.theme}
               marquee={party.marquee}
+              country={party.country}
               onSetTheme={onSetTheme}
               onSetMarquee={onSetMarquee}
+              onSetCountry={onSetCountry}
             />
           ) : null}
         </div>
@@ -411,11 +417,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           code={party.code}
           onAdded={setParty}
           bannedIds={bannedIds}
+          country={party.country}
         />
         <ImportPlaylist
           code={party.code}
           bannedIds={bannedIds}
           onImported={setParty}
+          country={party.country}
         />
         {playlistStatus}
         <div>
@@ -461,11 +469,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             code={party.code}
             onAdded={setParty}
             bannedIds={bannedIds}
+            country={party.country}
           />
           <ImportPlaylist
             code={party.code}
             bannedIds={bannedIds}
             onImported={setParty}
+            country={party.country}
           />
           {playlistStatus}
           <div

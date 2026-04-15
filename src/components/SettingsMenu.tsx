@@ -7,22 +7,58 @@ import type { PartyTheme } from "@/lib/types";
 // Admin-only settings modal, triggered from the header next to Show QR.
 // Collects "one-time" party configuration — the background wallpaper and
 // the scrolling marquee — in a single place so the header stays tidy.
+// Short curated list of common picks. YouTube accepts any ISO 3166-1 alpha-2,
+// but exposing a dropdown keeps the UI tidy and avoids typos. "" = Auto
+// (fall back to the request-derived region in resolveRegion).
+const COUNTRY_OPTIONS: Array<{ code: string; label: string }> = [
+  { code: "", label: "Auto (from location)" },
+  { code: "US", label: "United States" },
+  { code: "CA", label: "Canada" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "IE", label: "Ireland" },
+  { code: "AU", label: "Australia" },
+  { code: "NZ", label: "New Zealand" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+  { code: "ES", label: "Spain" },
+  { code: "IT", label: "Italy" },
+  { code: "NL", label: "Netherlands" },
+  { code: "SE", label: "Sweden" },
+  { code: "NO", label: "Norway" },
+  { code: "DK", label: "Denmark" },
+  { code: "PL", label: "Poland" },
+  { code: "JP", label: "Japan" },
+  { code: "KR", label: "South Korea" },
+  { code: "IN", label: "India" },
+  { code: "BR", label: "Brazil" },
+  { code: "MX", label: "Mexico" },
+  { code: "AR", label: "Argentina" },
+  { code: "ZA", label: "South Africa" },
+];
+
 export default function SettingsMenu({
   theme,
   marquee,
+  country,
   onSetTheme,
   onSetMarquee,
+  onSetCountry,
 }: {
   theme?: PartyTheme;
   marquee?: string;
+  country?: string;
   onSetTheme: (next: PartyTheme | null) => Promise<string | null>;
   onSetMarquee: (text: string) => Promise<string | null>;
+  onSetCountry: (next: string | null) => Promise<string | null>;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(marquee ?? "");
   const [busy, setBusy] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [countryBusy, setCountryBusy] = useState(false);
+  const [countryFlash, setCountryFlash] = useState(false);
+  const [countryErr, setCountryErr] = useState<string | null>(null);
 
   // Re-sync the textarea whenever the persisted marquee changes from the
   // server (another admin device, or a load).
@@ -39,6 +75,19 @@ export default function SettingsMenu({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  async function saveCountry(next: string) {
+    setCountryBusy(true);
+    setCountryErr(null);
+    const e = await onSetCountry(next || null);
+    setCountryBusy(false);
+    if (e) {
+      setCountryErr(e);
+    } else {
+      setCountryFlash(true);
+      setTimeout(() => setCountryFlash(false), 1200);
+    }
+  }
 
   async function saveMarquee() {
     setBusy(true);
@@ -94,6 +143,40 @@ export default function SettingsMenu({
                 Background
               </h3>
               <ThemePicker theme={theme} onApply={onSetTheme} />
+            </section>
+
+            <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Country
+              </h3>
+              <p className="text-xs text-white/50">
+                Only show videos playable in this country, and bias search
+                results toward its charts. Leave on Auto to use the server's
+                detected region.
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={country ?? ""}
+                  onChange={(e) => saveCountry(e.target.value)}
+                  disabled={countryBusy}
+                  className="input flex-1 text-sm"
+                >
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.code || "auto"} value={c.code}>
+                      {c.label}
+                      {c.code ? ` · ${c.code}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {countryFlash ? (
+                  <span className="text-xs text-emerald-300">Saved</span>
+                ) : countryBusy ? (
+                  <span className="text-xs text-white/50">Saving…</span>
+                ) : null}
+              </div>
+              {countryErr ? (
+                <p className="text-xs text-red-400">{countryErr}</p>
+              ) : null}
             </section>
 
             <section className="mt-5 space-y-2 border-t border-white/10 pt-4">

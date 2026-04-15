@@ -3,6 +3,7 @@ import {
   banVideo,
   clearPartyPlaylist,
   removeSong,
+  setCountry,
   setMarquee,
   setTheme,
   skipCurrent,
@@ -43,6 +44,7 @@ export async function POST(
     theme?: PartyTheme | null;
     marquee?: string;
     ip?: string;
+    country?: string | null;
   } = {};
   try {
     body = await req.json();
@@ -123,6 +125,19 @@ export async function POST(
 
   if (body.action === "marquee") {
     const res = await setMarquee(params.code, body.marquee ?? "");
+    if (!res.ok) {
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "country") {
+    const raw = body.country === undefined ? null : body.country;
+    const res = await setCountry(
+      params.code,
+      raw === null ? null : raw.toString(),
+    );
     if (!res.ok) {
       const status = res.error === "Party not found" ? 404 : 400;
       return NextResponse.json({ error: res.error }, { status });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { searchInnertube, type InnertubeResult } from "@/lib/innertube";
+import { checkRegionRestriction, resolveRegion } from "@/lib/region";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export const dynamic = "force-dynamic";
 // reuploads/karaoke/lyric-videos/covers penalized in scoring, and verified-
 // artist uploads (from innertube badges) boosted hard.
 
-const CACHE_VERSION = 2; // bump when ranking changes to invalidate old cache
+const CACHE_VERSION = 3; // bump when ranking changes to invalidate old cache
 const cache = new Map<string, { at: number; data: SearchResult[] }>();
 const CACHE_MS = 5 * 60 * 1000;
 const CACHE_MAX = 500;
@@ -49,11 +50,20 @@ interface SearchResult {
 }
 
 export async function GET(req: Request) {
-  const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  const url = new URL(req.url);
+  const q = (url.searchParams.get("q") ?? "").trim();
   if (!q) return NextResponse.json({ results: [] });
   if (q.length > 100) {
     return NextResponse.json({ error: "Query too long" }, { status: 400 });
   }
+
+  // Caller (AddSong) can pass the party's configured country; otherwise we
+  // fall back to the request's detected region. Used to feed `regionCode`
+  // to the Data API so results YouTube considers country-specific line up
+  // with where the party actually is, and to drop videos whose
+  // regionRestriction blocks them there.
+  const countryParam = (url.searchParams.get("country") ?? "").trim();
+  const region = resolveRegion(req, countryParam || null);
 
   // Bias toward music-video results: when the user typed a short free-form
   // query without any music-intent keywords (title like "mr. brightside"),
@@ -62,7 +72,7 @@ export async function GET(req: Request) {
   // etc. go through untouched so the user stays in control.
   const apiQuery = augmentMusicQuery(q);
 
-  const ck = `${CACHE_VERSION}:${apiQuery.toLowerCase()}`;
+  const ck = `${CACHE_VERSION}:${region}:${apiQuery.toLowerCase()}`;
   const hit = cache.get(ck);
   if (hit && Date.now() - hit.at < CACHE_MS) {
     return NextResponse.json({ results: hit.data });
@@ -74,7 +84,7 @@ export async function GET(req: Request) {
 
   // ---- 1) Official Data API (if we have a key and aren't in cooldown) ----
   if (key && Date.now() >= quotaExhaustedUntil) {
-    const dataApi = await searchViaDataApi(apiQuery, key);
+    const dataApi = await searchViaDataApi(apiQuery, key, region);
     if (dataApi.ok) {
       results = dataApi.results;
     } else if (dataApi.fallbackable) {
@@ -157,16 +167,20 @@ type DataApiOutcome =
 async function searchViaDataApi(
   q: string,
   key: string,
+  region: string,
 ): Promise<DataApiOutcome> {
   try {
     // videoCategoryId=10 = Music category. videoEmbeddable=true tells
     // YouTube to pre-filter out videos that can't play in a third-party
     // iframe — saves us manually dropping them after the fact. Both
     // filters are type=video only, so we spell that out explicitly.
+    // regionCode nudges YouTube's own ranking toward the host country so
+    // local charts/versions float to the top.
     const searchUrl =
       `https://www.googleapis.com/youtube/v3/search` +
       `?part=snippet&type=video&maxResults=10&safeSearch=none` +
       `&videoCategoryId=10&videoEmbeddable=true` +
+      `&regionCode=${encodeURIComponent(region)}` +
       `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`;
     const sr = await fetch(searchUrl, { cache: "no-store" });
     if (!sr.ok) {
@@ -195,9 +209,10 @@ async function searchViaDataApi(
     // Even with videoEmbeddable=true above, belt-and-suspenders: the
     // embed status can drift between search.list and videos.list (rare,
     // but we've seen it). Pull `status` so we can drop stragglers and
-    // also grab `contentDetails` for duration in the same call (1 quota
-    // unit total).
+    // also grab `contentDetails` for duration + regionRestriction in the
+    // same call (1 quota unit total).
     const nonEmbeddable = new Set<string>();
+    const regionBlocked = new Set<string>();
     if (ids.length > 0) {
       const videosUrl =
         `https://www.googleapis.com/youtube/v3/videos` +
@@ -212,6 +227,11 @@ async function searchViaDataApi(
           if (v.id) {
             durationById.set(v.id, { seconds: s, formatted: fmt(s) });
             if (v.status?.embeddable === false) nonEmbeddable.add(v.id);
+            const avail = checkRegionRestriction(
+              v.contentDetails?.regionRestriction,
+              region,
+            );
+            if (!avail.available) regionBlocked.add(v.id);
           }
         }
       } else {
@@ -229,6 +249,7 @@ async function searchViaDataApi(
         const id = it.id?.videoId;
         if (!id) return null;
         if (nonEmbeddable.has(id)) return null;
+        if (regionBlocked.has(id)) return null;
         const sn = it.snippet ?? {};
         const thumb =
           sn.thumbnails?.medium?.url ??
@@ -501,7 +522,10 @@ interface YTSearchItem {
 
 interface YTVideoItem {
   id?: string;
-  contentDetails?: { duration?: string };
+  contentDetails?: {
+    duration?: string;
+    regionRestriction?: { allowed?: string[]; blocked?: string[] };
+  };
   status?: { embeddable?: boolean };
 }
 
