@@ -115,6 +115,27 @@ Without `RESEND_API_KEY` the end-party flow still works — it just
 returns the recap in the UI and skips the email step with a "not
 configured" note.
 
+## Enabling Spotify import (optional)
+
+The playlist importer card has a **Spotify** tab that lets hosts paste a
+public or unlisted Spotify playlist URL and queue it up alongside their
+YouTube playlists. Tracks are matched to YouTube music videos
+automatically (Spotify audio itself isn't playable in the IFrame), so
+every Spotify row is represented by a real YouTube upload by the time
+it lands in the queue.
+
+1. Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and grab the **Client ID** + **Client Secret**.
+   - No redirect URI / scopes are needed — the server uses the
+     [Client Credentials flow](https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow),
+     which only reads public playlist metadata.
+2. Vercel project → **Settings → Environment Variables**:
+   - `SPOTIFY_CLIENT_ID` — required.
+   - `SPOTIFY_CLIENT_SECRET` — required.
+3. Redeploy.
+
+Without both env vars the Spotify tab returns a 503 "not configured"
+message; the YouTube flow keeps working normally.
+
 ### Quota notes
 
 `search.list` costs **100 quota units** per call; `videos.list` (for
