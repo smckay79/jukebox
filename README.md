@@ -95,6 +95,26 @@ Sessions are stored in the same Redis as party state; users are keyed by
 their Google `sub` claim (stable across sessions). The cookie is
 httpOnly, signed, and has a sliding 30-day expiry.
 
+## Enabling recap emails (optional)
+
+When the host hits **End party**, the app can email them a recap (songs
+played, durations, top 5 requesters). Sends go through
+[Resend](https://resend.com):
+
+1. Sign up at resend.com and copy your **API key**.
+2. (Optional) Verify a sending domain; otherwise you're limited to
+   Resend's sandbox `onboarding@resend.dev` sender and the "to" must be
+   your Resend account email.
+3. Vercel project → **Settings → Environment Variables**:
+   - `RESEND_API_KEY` — required to enable email.
+   - `RESEND_FROM` — optional; e.g. `Jukebox <recap@yourdomain.com>`.
+     Defaults to `Jukebox <onboarding@resend.dev>`.
+4. Redeploy.
+
+Without `RESEND_API_KEY` the end-party flow still works — it just
+returns the recap in the UI and skips the email step with a "not
+configured" note.
+
 ### Quota notes
 
 `search.list` costs **100 quota units** per call; `videos.list` (for

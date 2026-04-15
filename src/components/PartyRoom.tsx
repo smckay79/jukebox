@@ -6,9 +6,11 @@ import AddSong from "./AddSong";
 import AdminStats from "./AdminStats";
 import Background from "./Background";
 import BannedList from "./BannedList";
+import EndPartyButton from "./EndPartyButton";
 import ImportPlaylist from "./ImportPlaylist";
 import Marquee from "./Marquee";
 import NowPlayingCompact from "./NowPlayingCompact";
+import PartyEndedView from "./PartyEndedView";
 import PartyHistory from "./PartyHistory";
 import Player from "./Player";
 import QRCard from "./QRCard";
@@ -16,7 +18,13 @@ import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
 import UserMenu from "./UserMenu";
 import { getAdminKey, getUserId } from "@/lib/identity";
-import type { PartyTheme, PublicParty, PublicUser, Song } from "@/lib/types";
+import type {
+  PartyRecap,
+  PartyTheme,
+  PublicParty,
+  PublicUser,
+  Song,
+} from "@/lib/types";
 
 export default function PartyRoom({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
@@ -29,6 +37,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // (currently: PartyHistory saves a new playlist). ImportPlaylist watches
   // this to re-fetch so the new entry shows up without a manual reload.
   const [savedPlaylistsVersion, setSavedPlaylistsVersion] = useState(0);
+  // Populated by EndPartyButton's onEnded callback. The recap view reads
+  // this to render immediately without a second round-trip; guests (and
+  // the host on a later reload) will re-fetch via the end endpoint.
+  const [recap, setRecap] = useState<PartyRecap | null>(null);
   // QR is for inviting friends; hide by default on mobile (where the guest
   // already joined), and let hosts show it explicitly on the TV tab.
   const [showQR, setShowQR] = useState(false);
@@ -295,6 +307,23 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
   const isAdmin = !!adminKey;
 
+  // Party is over → swap the entire room for the recap view. Everything
+  // below this point assumes an active party; the ended view is its own
+  // self-contained layout.
+  if (party.endedAt) {
+    return (
+      <>
+        <Background theme={party.theme} />
+        <PartyEndedView
+          code={party.code}
+          name={party.name}
+          initialRecap={recap}
+          adminKey={adminKey}
+        />
+      </>
+    );
+  }
+
   const bannedIds = useMemo(
     () => new Set(party.banned.map((b) => b.videoId)),
     [party.banned],
@@ -378,6 +407,16 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onSetTheme={onSetTheme}
               onSetMarquee={onSetMarquee}
               onSetCountry={onSetCountry}
+            />
+          ) : null}
+          {isAdmin && adminKey ? (
+            <EndPartyButton
+              code={party.code}
+              adminKey={adminKey}
+              onEnded={(p, r) => {
+                setRecap(r);
+                setParty(p);
+              }}
             />
           ) : null}
           <UserMenu

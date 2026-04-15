@@ -11,6 +11,14 @@ export interface Song {
   // on legacy rows). "playlist" = promoted from the party's background
   // playlist; these are interruptible and never written to history.
   source?: "user" | "playlist";
+  // Wall-clock epoch ms at which this song became `nowPlaying`. Set when
+  // promoted; used on skip/ended to compute `playedSeconds`. Legacy rows
+  // (played before this field existed) leave it undefined.
+  startedAt?: number;
+  // How long the song actually played for, in seconds. Only populated on
+  // the history entry — nowPlaying doesn't carry this. Approximate (the
+  // player end signal is "song ended", not "song played exactly N sec").
+  playedSeconds?: number;
 }
 
 export interface BannedVideo {
@@ -66,6 +74,27 @@ export interface Party {
   // imports are filtered to videos playable in this country — overriding
   // the auto-detected region from the request. Absent = use auto-detect.
   country?: string;
+  // Set when the host ends the party. Once set, the client swaps to the
+  // "Party ended" recap view, the queue/nowPlaying are cleared, and new
+  // song adds are rejected. The party record itself is kept around until
+  // its normal Redis TTL expires (7 days) so guests who re-open the link
+  // still see the recap.
+  endedAt?: number;
+  // Best-effort flag so we don't double-send the recap email if a
+  // retry/reload hits the end endpoint twice. The email send itself is
+  // fire-and-forget; this just gates the second attempt.
+  recapEmailSent?: boolean;
+  // Email the recap was delivered to (or attempted to be delivered
+  // to). Lets a post-reload recap view show "Emailed to x@y.com" even
+  // though we don't re-send.
+  recapEmailTo?: string;
+  // Persisted copy of what we saved for the host on end. Lets a reload
+  // of the recap view show the same "Saved N tracks…" status.
+  recapSavedPlaylist?: {
+    id: string;
+    name: string;
+    count: number;
+  };
 }
 
 export interface PublicParty {
@@ -84,6 +113,50 @@ export interface PublicParty {
   // See Party.country — exposed so the admin settings menu can show the
   // current selection, and so the guest client can attach it to search.
   country?: string;
+  // When set, the party has been ended by the host — the client switches
+  // to a recap view.
+  endedAt?: number;
+}
+
+// Payload returned by POST /api/party/[code]/end and rendered on the
+// "Party ended" view. Aggregates the party's history into the three
+// things the host actually wants to see: what played (with durations),
+// who requested what, and how long things ran for.
+export interface PartyRecap {
+  code: string;
+  name: string;
+  startedAt: number;
+  endedAt: number;
+  totalPlayed: number; // number of history entries
+  totalSeconds: number; // sum of playedSeconds (skips unknown durations)
+  // Up to N most-requested users, sorted by count desc. `userId` is the
+  // anonymous client id (or the signed-in user's sub); `name` is the
+  // display name last seen for that user.
+  topRequesters: {
+    userId: string;
+    name: string;
+    count: number;
+  }[];
+  // Full played-song list, in chronological order (oldest first).
+  history: {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+    addedBy: string;
+    playedAt: number;
+    playedSeconds?: number;
+  }[];
+  // Present when a recap email was requested and the server attempted
+  // to send it. `ok: false` just means delivery failed or email isn't
+  // configured — the recap payload itself is still returned.
+  emailStatus?:
+    | { ok: true; to: string }
+    | { ok: false; reason: string };
+  // Present when the host was signed in and we wrote a SavedPlaylist
+  // copy of the history. Same pattern as emailStatus.
+  savedPlaylist?:
+    | { ok: true; id: string; name: string; count: number }
+    | { ok: false; reason: string };
 }
 
 // A signed-in user (via Google). `id` is the Google `sub` claim — stable

@@ -157,6 +157,7 @@ export function toPublicParty(p: Party): PublicParty {
       ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
       : undefined,
     country: p.country,
+    endedAt: p.endedAt,
   };
 }
 
@@ -167,11 +168,14 @@ export function toPublicParty(p: Party): PublicParty {
 // leaves nowPlaying (see advanceOnLeaving below).
 function promoteNext(party: Party) {
   if (party.nowPlaying) return;
+  const now = Date.now();
   const sorted = sortQueue(party.queue);
   const next = sorted[0];
   if (next) {
     party.queue = party.queue.filter((s) => s.id !== next.id);
-    party.nowPlaying = next;
+    // Stamp the moment this song started playing, so skip/ended can
+    // compute actual play duration for the recap.
+    party.nowPlaying = { ...next, startedAt: now };
     return;
   }
   // No user songs — pull from the background playlist if one is set.
@@ -192,12 +196,24 @@ function promoteNext(party: Party) {
       thumbnail: track.thumbnail,
       addedBy: "Party playlist",
       addedByUserId: "__playlist",
-      addedAt: Date.now(),
+      addedAt: now,
       votes: [],
       source: "playlist",
+      startedAt: now,
     };
     return;
   }
+}
+
+// Finalize the nowPlaying entry before it's archived into history:
+// compute playedSeconds from startedAt, cap to a sane upper bound so a
+// tab that was left paused for 9 hours doesn't log a 9-hour duration.
+const MAX_PLAYED_SECONDS = 3 * 60 * 60; // 3h — longer than any reasonable track
+function finalizePlayed(song: Song): Song {
+  if (!song.startedAt) return song;
+  const elapsed = Math.max(0, Math.floor((Date.now() - song.startedAt) / 1000));
+  const capped = Math.min(elapsed, MAX_PLAYED_SECONDS);
+  return { ...song, playedSeconds: capped };
 }
 
 // Returns true if the currently-playing track is a background-playlist
@@ -255,6 +271,9 @@ export async function addSong(
   const s = storage();
   const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
+  if (party.endedAt) {
+    return { ok: false, error: "This party has ended" };
+  }
 
   if (party.banned.some((b) => b.videoId === input.videoId)) {
     return { ok: false, error: "That song has been banned from this party" };
@@ -343,7 +362,7 @@ export async function skipCurrent(
   // Playlist loop tracks don't count as "played" — they don't go into
   // history and we just advance to the next cursor item.
   if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
-    pushHistory(party, party.nowPlaying);
+    pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;
   promoteNext(party);
@@ -364,7 +383,7 @@ export async function songEnded(
     return { ok: true, party };
   }
   if (!isPlaylistTrack(party.nowPlaying)) {
-    pushHistory(party, party.nowPlaying);
+    pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;
   promoteNext(party);
@@ -570,6 +589,54 @@ export async function getPartyHistory(code: string): Promise<Song[] | null> {
   const party = await storage().get(code.toUpperCase());
   if (!party) return null;
   return [...party.history].reverse();
+}
+
+// Idempotent: calling endParty twice just returns the already-ended state.
+// Clears nowPlaying / queue / background-playlist so any still-open
+// client tabs stop looping, and flags `endedAt` so new writes bounce.
+// The currently-playing song (if any) gets finalized into history first
+// so its playedSeconds is captured in the recap.
+export async function endParty(
+  code: string,
+): Promise<{ ok: true; party: Party; alreadyEnded: boolean } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (party.endedAt) {
+    return { ok: true, party, alreadyEnded: true };
+  }
+  if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
+    pushHistory(party, finalizePlayed(party.nowPlaying));
+  }
+  party.nowPlaying = null;
+  party.queue = [];
+  party.playlist = undefined;
+  party.endedAt = Date.now();
+  await persist(party);
+  return { ok: true, party, alreadyEnded: false };
+}
+
+// Record the recap-delivery side-effects onto the Party record so a
+// post-end reload can still display them. Partial writes are fine —
+// each field is independently optional.
+export async function recordRecapDelivery(
+  code: string,
+  update: {
+    emailSent?: boolean;
+    emailTo?: string;
+    savedPlaylist?: { id: string; name: string; count: number };
+  },
+): Promise<void> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return;
+  if (update.emailSent !== undefined) party.recapEmailSent = update.emailSent;
+  if (update.emailTo !== undefined) party.recapEmailTo = update.emailTo;
+  if (update.savedPlaylist !== undefined) {
+    party.recapSavedPlaylist = update.savedPlaylist;
+  }
+  // Internal flags — no SSE publish needed.
+  await s.set(party);
 }
 
 export async function verifyAdmin(
