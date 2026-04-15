@@ -271,6 +271,14 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "marquee", marquee: text });
   }
 
+  async function onClearPlaylist() {
+    const ok = confirm(
+      "Clear the party playlist? Queued songs keep playing, but nothing will loop in the background.",
+    );
+    if (!ok) return;
+    await adminPost({ action: "clearPlaylist" });
+  }
+
   const isAdmin = !!adminKey;
 
   const bannedIds = useMemo(
@@ -278,11 +286,38 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     [party.banned],
   );
 
-  const queuedIds = useMemo(() => {
-    const s = new Set(party.queue.map((q) => q.videoId));
-    if (party.nowPlaying) s.add(party.nowPlaying.videoId);
-    return s;
-  }, [party.queue, party.nowPlaying]);
+  // Tiny status pill for the background playlist — rendered on both
+  // mobile and desktop. Shows whether the current track is a loop pick,
+  // and gives hosts a quick clear control.
+  const playlistStatus = party.playlist ? (
+    <div className="card flex flex-wrap items-center justify-between gap-2 p-3 text-xs">
+      <div>
+        <span className="font-semibold text-brand-300">Party playlist</span>
+        <span className="text-white/60">
+          {" "}
+          · {party.playlist.count} track
+          {party.playlist.count === 1 ? "" : "s"} looping in the background
+          {party.nowPlaying?.source === "playlist" ? (
+            <span className="text-white/50"> · playing now</span>
+          ) : (
+            <span className="text-white/40">
+              {" "}
+              · paused while the queue runs
+            </span>
+          )}
+        </span>
+      </div>
+      {isAdmin ? (
+        <button
+          type="button"
+          onClick={onClearPlaylist}
+          className="text-white/70 underline-offset-2 hover:text-white hover:underline"
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <>
@@ -379,9 +414,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         <ImportPlaylist
           code={party.code}
           bannedIds={bannedIds}
-          queuedIds={queuedIds}
           onImported={setParty}
         />
+        {playlistStatus}
         <div>
           <h2 className="mb-2 text-lg font-semibold">
             Up next{" "}
@@ -426,9 +461,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           <ImportPlaylist
             code={party.code}
             bannedIds={bannedIds}
-            queuedIds={queuedIds}
             onImported={setParty}
           />
+          {playlistStatus}
           <div
             ref={presenterRef}
             className={

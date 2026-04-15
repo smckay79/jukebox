@@ -1,7 +1,14 @@
 import { randomBytes } from "crypto";
 import { getRedis } from "./kv";
 import { publishPartyUpdate } from "./pubsub";
-import type { BannedVideo, Party, PartyTheme, PublicParty, Song } from "./types";
+import type {
+  BannedVideo,
+  Party,
+  PartyTheme,
+  PlaylistTrack,
+  PublicParty,
+  Song,
+} from "./types";
 
 // Seeded on every new party. Other bans get added live by the admin.
 const DEFAULT_BANS: BannedVideo[] = [
@@ -133,16 +140,56 @@ export function toPublicParty(p: Party): PublicParty {
     banned: p.banned ?? [],
     theme: p.theme,
     marquee: p.marquee,
+    playlist: p.playlist
+      ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
+      : undefined,
   };
 }
 
+// Promote the next track into nowPlaying. User queue wins over the
+// background playlist; within the user queue we pick highest-voted (ties
+// by earliest addedAt). When the user queue is empty and a playlist is
+// set, loop through its items — cursor advances as each playlist track
+// leaves nowPlaying (see advanceOnLeaving below).
 function promoteNext(party: Party) {
   if (party.nowPlaying) return;
   const sorted = sortQueue(party.queue);
   const next = sorted[0];
-  if (!next) return;
-  party.queue = party.queue.filter((s) => s.id !== next.id);
-  party.nowPlaying = next;
+  if (next) {
+    party.queue = party.queue.filter((s) => s.id !== next.id);
+    party.nowPlaying = next;
+    return;
+  }
+  // No user songs — pull from the background playlist if one is set.
+  const pl = party.playlist;
+  if (!pl || pl.items.length === 0) return;
+  // Skip over any banned items (a host might ban a song that's also in
+  // their playlist). If every item is banned we just give up.
+  const banned = new Set(party.banned.map((b) => b.videoId));
+  for (let tries = 0; tries < pl.items.length; tries++) {
+    const idx = ((pl.cursor % pl.items.length) + pl.items.length) % pl.items.length;
+    const track = pl.items[idx];
+    pl.cursor = idx + 1;
+    if (banned.has(track.videoId)) continue;
+    party.nowPlaying = {
+      id: makeId(),
+      videoId: track.videoId,
+      title: track.title,
+      thumbnail: track.thumbnail,
+      addedBy: "Party playlist",
+      addedByUserId: "__playlist",
+      addedAt: Date.now(),
+      votes: [],
+      source: "playlist",
+    };
+    return;
+  }
+}
+
+// Returns true if the currently-playing track is a background-playlist
+// promotion — i.e. safe to interrupt and skip logging to history.
+function isPlaylistTrack(s: Song | null | undefined): boolean {
+  return !!s && s.source === "playlist";
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -213,83 +260,18 @@ export async function addSong(
     addedByUserId: input.addedByUserId,
     addedAt: Date.now(),
     votes: [input.addedByUserId], // adding implies upvote
+    source: "user",
   };
   party.queue.push(song);
+  // Interrupt a background-playlist track the moment a real user song
+  // arrives — the user expects their pick to start right away, not after
+  // the current loop track finishes.
+  if (isPlaylistTrack(party.nowPlaying)) {
+    party.nowPlaying = null;
+  }
   if (!party.nowPlaying) promoteNext(party);
   await persist(party);
   return { ok: true, song, party };
-}
-
-// Bulk-add used by the playlist import. Single read + single write + single
-// publish, so a 50-song import is one Redis round-trip rather than 50.
-// Already-queued / currently-playing / banned videos are silently skipped
-// and counted in the response so the UI can report them.
-export async function addSongs(
-  code: string,
-  items: Array<{
-    videoId: string;
-    title: string;
-    thumbnail: string;
-  }>,
-  by: { addedBy: string; addedByUserId: string },
-): Promise<
-  | {
-      ok: true;
-      party: Party;
-      added: number;
-      skippedDuplicate: number;
-      skippedBanned: number;
-    }
-  | { ok: false; error: string }
-> {
-  const s = storage();
-  const party = await s.get(code.toUpperCase());
-  if (!party) return { ok: false, error: "Party not found" };
-
-  const bannedSet = new Set(party.banned.map((b) => b.videoId));
-  const present = new Set<string>();
-  for (const q of party.queue) present.add(q.videoId);
-  if (party.nowPlaying) present.add(party.nowPlaying.videoId);
-
-  let added = 0;
-  let skippedBanned = 0;
-  let skippedDuplicate = 0;
-  const now = Date.now();
-  const addedBy = by.addedBy.trim() || "Anonymous";
-
-  for (const input of items) {
-    const vid = input.videoId;
-    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) continue;
-    if (bannedSet.has(vid)) {
-      skippedBanned++;
-      continue;
-    }
-    if (present.has(vid)) {
-      skippedDuplicate++;
-      continue;
-    }
-    present.add(vid);
-    party.queue.push({
-      id: makeId(),
-      videoId: vid,
-      title: (input.title || "YouTube video").slice(0, 200),
-      thumbnail:
-        input.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-      addedBy,
-      addedByUserId: by.addedByUserId,
-      // Stagger addedAt so FIFO order within an import matches the playlist
-      // order. Without the offset, ties fall back on songId (random).
-      addedAt: now + added,
-      votes: [by.addedByUserId],
-    });
-    added++;
-  }
-
-  if (added > 0) {
-    if (!party.nowPlaying) promoteNext(party);
-    await persist(party);
-  }
-  return { ok: true, party, added, skippedDuplicate, skippedBanned };
 }
 
 export async function voteSong(
@@ -344,7 +326,11 @@ export async function skipCurrent(
   const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
 
-  if (party.nowPlaying) party.history.push(party.nowPlaying);
+  // Playlist loop tracks don't count as "played" — they don't go into
+  // history and we just advance to the next cursor item.
+  if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
+    party.history.push(party.nowPlaying);
+  }
   party.nowPlaying = null;
   promoteNext(party);
   await persist(party);
@@ -363,7 +349,9 @@ export async function songEnded(
   if (!party.nowPlaying || party.nowPlaying.videoId !== videoId) {
     return { ok: true, party };
   }
-  party.history.push(party.nowPlaying);
+  if (!isPlaylistTrack(party.nowPlaying)) {
+    party.history.push(party.nowPlaying);
+  }
   party.nowPlaying = null;
   promoteNext(party);
   await persist(party);
@@ -471,6 +459,68 @@ export async function setMarquee(
   if (!party) return { ok: false, error: "Party not found" };
   const clean = (text ?? "").toString().trim().slice(0, MAX_MARQUEE_LEN);
   party.marquee = clean || undefined;
+  await persist(party);
+  return { ok: true, party };
+}
+
+// Replace the party's background playlist wholesale. Caps at 100 items to
+// match the import route's PLAYLIST_MAX. If something's currently playing
+// as a background track, keep it going — the new playlist will pick up
+// from cursor 0 once the current loop track ends.
+const PLAYLIST_MAX = 100;
+
+export async function setPartyPlaylist(
+  code: string,
+  items: PlaylistTrack[],
+): Promise<{ ok: true; party: Party; count: number } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  const clean: PlaylistTrack[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    const vid = (it.videoId ?? "").toString().trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) continue;
+    if (seen.has(vid)) continue;
+    seen.add(vid);
+    clean.push({
+      videoId: vid,
+      title: (it.title || "YouTube video").toString().slice(0, 200),
+      thumbnail:
+        (it.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`)
+          .toString()
+          .slice(0, 500),
+    });
+    if (clean.length >= PLAYLIST_MAX) break;
+  }
+
+  if (clean.length === 0) {
+    return { ok: false, error: "No valid videos in playlist" };
+  }
+
+  party.playlist = { items: clean, cursor: 0, setAt: Date.now() };
+  // If nothing is playing right now, start the playlist immediately so the
+  // host sees feedback that it took effect.
+  if (!party.nowPlaying) promoteNext(party);
+  await persist(party);
+  return { ok: true, party, count: clean.length };
+}
+
+export async function clearPartyPlaylist(
+  code: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  party.playlist = undefined;
+  // Stop a background track that's currently playing — once the playlist
+  // is cleared there's no queue of loop items, so we just drop out to the
+  // user queue (or silence).
+  if (isPlaylistTrack(party.nowPlaying)) {
+    party.nowPlaying = null;
+    promoteNext(party);
+  }
   await persist(party);
   return { ok: true, party };
 }

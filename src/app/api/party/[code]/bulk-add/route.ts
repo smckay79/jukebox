@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { addSongs, toPublicParty } from "@/lib/store";
+import { setPartyPlaylist, toPublicParty } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Bulk-add endpoint used by the playlist importer. Accepts the videos
-// already previewed client-side (we trust the client-provided title /
-// thumbnail because they came from our own /api/youtube/playlist endpoint
-// moments before). The underlying addSongs batches the writes so one
-// import = one Redis round-trip.
+// Imports a playlist as the party's background playlist. The tracks loop
+// whenever the user queue is empty; any user-added song interrupts the
+// background track and takes priority. Capped at 100 items to match the
+// preview endpoint.
 const MAX_ITEMS = 100;
 
 export async function POST(
@@ -17,8 +16,6 @@ export async function POST(
 ) {
   let body: {
     items?: Array<{ videoId?: string; title?: string; thumbnail?: string }>;
-    addedBy?: string;
-    userId?: string;
   } = {};
   try {
     body = await req.json();
@@ -37,13 +34,6 @@ export async function POST(
     );
   }
 
-  const userId = (body.userId ?? "").toString().trim().slice(0, 64);
-  if (!userId) {
-    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
-  }
-
-  const addedBy = (body.addedBy ?? "").toString().trim().slice(0, 40);
-
   const cleanItems = items
     .map((it) => ({
       videoId: (it.videoId ?? "").toString().trim(),
@@ -59,18 +49,13 @@ export async function POST(
     );
   }
 
-  const res = await addSongs(params.code, cleanItems, {
-    addedBy,
-    addedByUserId: userId,
-  });
+  const res = await setPartyPlaylist(params.code, cleanItems);
   if (!res.ok) {
     const status = res.error === "Party not found" ? 404 : 400;
     return NextResponse.json({ error: res.error }, { status });
   }
   return NextResponse.json({
     party: toPublicParty(res.party),
-    added: res.added,
-    skippedDuplicate: res.skippedDuplicate,
-    skippedBanned: res.skippedBanned,
+    count: res.count,
   });
 }

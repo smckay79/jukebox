@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   banVideo,
+  clearPartyPlaylist,
   removeSong,
   setMarquee,
   setTheme,
@@ -120,6 +121,15 @@ export async function POST(
 
   if (body.action === "marquee") {
     const res = await setMarquee(params.code, body.marquee ?? "");
+    if (!res.ok) {
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "clearPlaylist") {
+    const res = await clearPartyPlaylist(params.code);
     if (!res.ok) {
       const status = res.error === "Party not found" ? 404 : 400;
       return NextResponse.json({ error: res.error }, { status });

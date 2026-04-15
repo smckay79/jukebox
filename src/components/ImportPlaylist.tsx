@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDisplayName, getUserId } from "@/lib/identity";
 import type { PublicParty } from "@/lib/types";
 
 interface PreviewItem {
@@ -32,21 +31,20 @@ interface MatchCandidate {
 // for politeness. 6 keeps a 100-song playlist matched in ~15s.
 const MATCH_CONCURRENCY = 6;
 
-// Collapsible card that lets a guest paste a YouTube / YouTube Music
-// playlist URL (or just its ID), preview the tracks, pick which ones to
-// keep, and bulk-add them in one Redis round-trip. After the preview
-// loads, a background worker tries to automatch each item against its
-// official music video (for YouTube Music "- Topic" audio entries) via
-// the /api/youtube/match endpoint.
+// Collapsible card that lets the host paste a YouTube / YouTube Music
+// playlist URL (or ID), preview the tracks, pick which ones to keep, and
+// set them as the party's background playlist. The tracks loop whenever
+// the user queue is empty; any user-added song interrupts and ranks
+// higher. After the preview loads, a background worker tries to automatch
+// each item against its official music video (for YouTube Music "- Topic"
+// auto-audio entries) via the /api/youtube/match endpoint.
 export default function ImportPlaylist({
   code,
   bannedIds,
-  queuedIds,
   onImported,
 }: {
   code: string;
   bannedIds: Set<string>;
-  queuedIds: Set<string>;
   onImported: (party: PublicParty) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -111,11 +109,7 @@ export default function ImportPlaylist({
       setRegion(reg);
       const next = new Set<string>();
       for (const r of results) {
-        if (
-          !bannedIds.has(r.videoId) &&
-          !queuedIds.has(r.videoId) &&
-          r.available !== false
-        ) {
+        if (!bannedIds.has(r.videoId) && r.available !== false) {
           next.add(r.videoId);
         }
       }
@@ -201,11 +195,7 @@ export default function ImportPlaylist({
     if (!items) return;
     const next = new Set<string>();
     for (const r of items) {
-      if (
-        !bannedIds.has(r.videoId) &&
-        !queuedIds.has(r.videoId) &&
-        r.available !== false
-      ) {
+      if (!bannedIds.has(r.videoId) && r.available !== false) {
         next.add(r.videoId);
       }
     }
@@ -255,11 +245,7 @@ export default function ImportPlaylist({
       const res = await fetch(`/api/party/${code}/bulk-add`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          userId: getUserId(),
-          addedBy: getDisplayName() || "Anonymous",
-          items: picks,
-        }),
+        body: JSON.stringify({ items: picks }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -267,13 +253,10 @@ export default function ImportPlaylist({
         return;
       }
       onImported((data as { party: PublicParty }).party);
-      const added = (data as { added?: number }).added ?? 0;
-      const dup = (data as { skippedDuplicate?: number }).skippedDuplicate ?? 0;
-      const ban = (data as { skippedBanned?: number }).skippedBanned ?? 0;
-      const parts = [`Added ${added}`];
-      if (dup) parts.push(`${dup} already queued`);
-      if (ban) parts.push(`${ban} banned`);
-      setFlash(parts.join(" · "));
+      const count = (data as { count?: number }).count ?? picks.length;
+      setFlash(
+        `Party playlist set · ${count} track${count === 1 ? "" : "s"} will loop in the background.`,
+      );
       setItems(null);
       setSelected(new Set());
       setMatches(new Map());
@@ -291,12 +274,9 @@ export default function ImportPlaylist({
   const eligibleCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
-      (it) =>
-        !bannedIds.has(it.videoId) &&
-        !queuedIds.has(it.videoId) &&
-        it.available !== false,
+      (it) => !bannedIds.has(it.videoId) && it.available !== false,
     ).length;
-  }, [items, bannedIds, queuedIds]);
+  }, [items, bannedIds]);
 
   const unavailableCount = useMemo(() => {
     if (!items) return 0;
@@ -320,9 +300,9 @@ export default function ImportPlaylist({
         className="flex w-full items-center justify-between text-left"
       >
         <span className="text-sm font-semibold">
-          Import a playlist{" "}
+          Party playlist{" "}
           <span className="font-normal text-white/50">
-            · YouTube Music favorites
+            · loops when the queue is empty
           </span>
         </span>
         <span className="text-white/50">{open ? "▾" : "▸"}</span>
@@ -372,13 +352,11 @@ export default function ImportPlaylist({
                       {region ? ` in ${region}` : ""}
                     </span>
                   ) : null}
-                  {eligibleCount <
-                  items.length - unavailableCount ? (
+                  {eligibleCount < items.length - unavailableCount ? (
                     <span className="text-white/40">
                       {" "}
                       ·{" "}
-                      {items.length - eligibleCount - unavailableCount}{" "}
-                      already queued or banned
+                      {items.length - eligibleCount - unavailableCount} banned
                     </span>
                   ) : null}
                 </span>
@@ -427,9 +405,8 @@ export default function ImportPlaylist({
               <ul className="max-h-[50vh] space-y-2 overflow-auto">
                 {items.map((r) => {
                   const banned = bannedIds.has(r.videoId);
-                  const queued = queuedIds.has(r.videoId);
                   const unavailable = r.available === false;
-                  const disabled = banned || queued || unavailable;
+                  const disabled = banned || unavailable;
                   const checked = selected.has(r.videoId);
                   const match = matches.get(r.videoId) ?? null;
                   const usingMatch =
@@ -437,11 +414,9 @@ export default function ImportPlaylist({
                   const shown = usingMatch && match ? match : r;
                   const badge = banned
                     ? "Banned"
-                    : queued
-                      ? "Already queued"
-                      : unavailable
-                        ? (r.unavailableReason ?? "Unavailable")
-                        : null;
+                    : unavailable
+                      ? (r.unavailableReason ?? "Unavailable")
+                      : null;
                   return (
                     <li
                       key={r.videoId}
@@ -520,8 +495,8 @@ export default function ImportPlaylist({
                   className="btn-primary !px-3 !py-1.5 text-sm"
                 >
                   {submitting
-                    ? "Adding…"
-                    : `Add ${selected.size} song${selected.size === 1 ? "" : "s"} to queue`}
+                    ? "Saving…"
+                    : `Set as party playlist · ${selected.size} track${selected.size === 1 ? "" : "s"}`}
                 </button>
               </div>
             </>
