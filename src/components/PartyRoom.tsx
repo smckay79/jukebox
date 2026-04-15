@@ -13,13 +13,17 @@ import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
+import UserMenu from "./UserMenu";
 import { getAdminKey, getUserId } from "@/lib/identity";
-import type { PartyTheme, PublicParty, Song } from "@/lib/types";
+import type { PartyTheme, PublicParty, PublicUser, Song } from "@/lib/types";
 
 export default function PartyRoom({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
   const [userId, setUserId] = useState("");
   const [adminKey, setAdmin] = useState<string | null>(null);
+  // Signed-in user (from /api/auth/me via UserMenu). Null when logged out.
+  // Drives the "Your saved playlists" section in ImportPlaylist.
+  const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   // QR is for inviting friends; hide by default on mobile (where the guest
   // already joined), and let hosts show it explicitly on the TV tab.
   const [showQR, setShowQR] = useState(false);
@@ -348,7 +352,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             ) : null}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             className="btn-ghost text-sm md:hidden"
             onClick={() => setShowMobileVideo((v) => !v)}
@@ -371,6 +375,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onSetCountry={onSetCountry}
             />
           ) : null}
+          <UserMenu
+            nextPath={`/party/${party.code}`}
+            onUserChange={setAuthUser}
+          />
         </div>
       </header>
 
@@ -424,6 +432,8 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           bannedIds={bannedIds}
           onImported={setParty}
           country={party.country}
+          authUser={authUser}
+          isAdmin={isAdmin}
         />
         {playlistStatus}
         <div>
@@ -476,6 +486,8 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             bannedIds={bannedIds}
             onImported={setParty}
             country={party.country}
+            authUser={authUser}
+            isAdmin={isAdmin}
           />
           {playlistStatus}
           <div

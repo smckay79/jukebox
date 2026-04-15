@@ -85,3 +85,43 @@ export interface PublicParty {
   // current selection, and so the guest client can attach it to search.
   country?: string;
 }
+
+// A signed-in user (via Google). `id` is the Google `sub` claim — stable
+// across sessions, the only field we treat as the primary key.
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  createdAt: number;
+  lastLoginAt: number;
+}
+
+// Same shape exposed to the client. Keeps parity explicit so a future
+// addition of server-only fields on User doesn't silently leak.
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
+// A user-owned playlist they can reuse across parties. Items match the
+// shape of PlaylistTrack so we can drop them straight into setPartyPlaylist.
+export interface SavedPlaylist {
+  id: string;
+  ownerId: string;
+  name: string;
+  items: PlaylistTrack[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Summary shape for listings — omits the full item array so a "your
+// playlists" sidebar doesn't pay the bandwidth of every track.
+export interface SavedPlaylistSummary {
+  id: string;
+  name: string;
+  count: number;
+  updatedAt: number;
+}

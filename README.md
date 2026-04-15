@@ -71,6 +71,30 @@ search-as-you-type for videos, add a **YouTube Data API v3** key:
 Without the env var, `/api/search` returns 503 and the client cleanly
 falls back to URL-paste mode.
 
+## Enabling Google sign-in (optional)
+
+Guests and hosts can use the app fully anonymously. Signing in with Google
+only unlocks **saved playlists** — a signed-in user can save a curated
+track list to their account and reload it into any party they host.
+
+1. Google Cloud Console → **APIs & Services → Credentials → Create
+   credentials → OAuth client ID**. Application type: **Web application**.
+2. **Authorized JavaScript origins** → add your site URL(s), e.g.
+   `http://localhost:3000` and `https://your-site.vercel.app`.
+3. Copy the **Client ID** (no client secret is needed; we use Google
+   Identity Services tokens, verified server-side via the tokeninfo
+   endpoint).
+4. Vercel project → **Settings → Environment Variables**:
+   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — the Client ID from step 3.
+   - `GOOGLE_CLIENT_ID` — same value (server-side audience check).
+   - `AUTH_SECRET` — any random 32+ byte string. Used to HMAC-sign the
+     session cookie. `openssl rand -hex 32` is fine.
+5. Redeploy.
+
+Sessions are stored in the same Redis as party state; users are keyed by
+their Google `sub` claim (stable across sessions). The cookie is
+httpOnly, signed, and has a sliding 30-day expiry.
+
 ### Quota notes
 
 `search.list` costs **100 quota units** per call; `videos.list` (for

@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PublicParty } from "@/lib/types";
+import { getAdminKey } from "@/lib/identity";
+import type {
+  PublicParty,
+  PublicUser,
+  SavedPlaylistSummary,
+} from "@/lib/types";
 
 interface PreviewItem {
   videoId: string;
@@ -43,11 +48,21 @@ export default function ImportPlaylist({
   bannedIds,
   onImported,
   country,
+  authUser,
+  isAdmin,
 }: {
   code: string;
   bannedIds: Set<string>;
   onImported: (party: PublicParty) => void;
   country?: string;
+  // Signed-in user, if any. When present we expose the save/load saved-
+  // playlist affordances; when null we just hide them (no pressure to
+  // sign in beyond the header hint).
+  authUser?: PublicUser | null;
+  // Admin-only actions like "Load into party" require the admin key. We
+  // still show the list to non-admin owners so they can see/manage their
+  // own library; the Load button is just gated.
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
@@ -78,6 +93,134 @@ export default function ImportPlaylist({
   // A ref + generation counter so we can cancel a match pass when the user
   // loads a different playlist mid-flight.
   const matchGen = useRef(0);
+
+  // --- Saved (user-owned) playlists ---
+  // Populated from /api/playlists when the user signs in. We only fetch
+  // once per signed-in session; create/delete updates the list locally.
+  const [savedPlaylists, setSavedPlaylists] = useState<
+    SavedPlaylistSummary[]
+  >([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [savedError, setSavedError] = useState<string | null>(null);
+  const [busyPlaylistId, setBusyPlaylistId] = useState<string | null>(null);
+  // Save-as-playlist flow: textbox for the new name + in-flight flag.
+  const [saveName, setSaveName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadSavedPlaylists = useCallback(async () => {
+    setSavedLoading(true);
+    setSavedError(null);
+    try {
+      const res = await fetch("/api/playlists", { cache: "no-store" });
+      if (!res.ok) {
+        if (res.status !== 401) setSavedError("Couldn't load your playlists");
+        setSavedPlaylists([]);
+        return;
+      }
+      const data = (await res.json()) as { playlists?: SavedPlaylistSummary[] };
+      setSavedPlaylists(data.playlists ?? []);
+    } catch {
+      setSavedError("Network error");
+    } finally {
+      setSavedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authUser) loadSavedPlaylists();
+    else setSavedPlaylists([]);
+  }, [authUser, loadSavedPlaylists]);
+
+  async function loadSavedIntoParty(id: string) {
+    const key = getAdminKey(code);
+    if (!key) {
+      setSavedError("Only the host can load a playlist into the party.");
+      return;
+    }
+    setBusyPlaylistId(id);
+    setSavedError(null);
+    try {
+      const res = await fetch(`/api/party/${code}/load-playlist`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": key,
+        },
+        body: JSON.stringify({ playlistId: id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSavedError(
+          (data as { error?: string }).error ?? "Couldn't load that playlist",
+        );
+        return;
+      }
+      onImported((data as { party: PublicParty }).party);
+      const count = (data as { count?: number }).count ?? 0;
+      setFlash(
+        `Loaded ${count} track${count === 1 ? "" : "s"} from your playlist.`,
+      );
+    } catch {
+      setSavedError("Network error");
+    } finally {
+      setBusyPlaylistId(null);
+    }
+  }
+
+  async function deleteSavedPlaylist(id: string, name: string) {
+    if (!confirm(`Delete playlist "${name}"? This can't be undone.`)) return;
+    setBusyPlaylistId(id);
+    setSavedError(null);
+    try {
+      const res = await fetch(`/api/playlists/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setSavedError(data.error ?? "Couldn't delete that playlist");
+        return;
+      }
+      setSavedPlaylists((ps) => ps.filter((p) => p.id !== id));
+    } catch {
+      setSavedError("Network error");
+    } finally {
+      setBusyPlaylistId(null);
+    }
+  }
+
+  async function saveSelectionAsPlaylist() {
+    if (!items || selected.size === 0) return;
+    const name = saveName.trim();
+    if (!name) {
+      setError("Give your playlist a name first.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setFlash(null);
+    const picks = items
+      .filter((it) => selected.has(it.videoId))
+      .map((it) => effectiveFor(it));
+    try {
+      const res = await fetch("/api/playlists", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, items: picks }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? "Couldn't save");
+        return;
+      }
+      setFlash(`Saved "${name}" to your playlists.`);
+      setSaveName("");
+      loadSavedPlaylists();
+    } catch {
+      setError("Network error — try again?");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function loadPlaylist(e: React.FormEvent) {
     e.preventDefault();
@@ -312,6 +455,65 @@ export default function ImportPlaylist({
       </button>
       {open ? (
         <div className="mt-3 space-y-3">
+          {/* Signed-in users see their saved playlists at the top so loading
+              one is a single click, no URL-paste round-trip. */}
+          {authUser ? (
+            <div className="rounded-lg bg-white/5 p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                <span>Your saved playlists</span>
+                {savedLoading ? (
+                  <span className="text-white/40">Loading…</span>
+                ) : null}
+              </div>
+              {savedError ? (
+                <p className="text-xs text-red-400">{savedError}</p>
+              ) : null}
+              {!savedLoading && savedPlaylists.length === 0 ? (
+                <p className="text-xs text-white/50">
+                  You haven&apos;t saved any playlists yet. Load a YouTube
+                  playlist below, pick your favorites, and hit Save.
+                </p>
+              ) : null}
+              {savedPlaylists.length > 0 ? (
+                <ul className="space-y-1">
+                  {savedPlaylists.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center gap-2 rounded bg-white/5 px-2 py-1 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{p.name}</div>
+                        <div className="text-white/50">
+                          {p.count} track{p.count === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          disabled={busyPlaylistId === p.id}
+                          onClick={() => loadSavedIntoParty(p.id)}
+                          className="rounded bg-brand-600/80 px-2 py-0.5 text-white hover:bg-brand-500"
+                          title="Load this playlist as the party's background loop"
+                        >
+                          {busyPlaylistId === p.id ? "…" : "Load"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={busyPlaylistId === p.id}
+                        onClick={() => deleteSavedPlaylist(p.id, p.name)}
+                        className="rounded bg-white/10 px-2 py-0.5 text-white/70 hover:bg-red-600/60 hover:text-white"
+                        title="Delete"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+
           <form onSubmit={loadPlaylist} className="flex gap-2">
             <input
               value={raw}
@@ -404,6 +606,33 @@ export default function ImportPlaylist({
                   ) : null}
                 </span>
               </label>
+
+              {/* Save-as-playlist: only meaningful when signed in. */}
+              {authUser ? (
+                <div className="rounded-lg bg-white/5 p-2">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                    Save to your account
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      placeholder="Playlist name"
+                      maxLength={80}
+                      className="input flex-1 !py-1 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={saving || selected.size === 0 || !saveName.trim()}
+                      onClick={saveSelectionAsPlaylist}
+                      className="btn-ghost !px-3 !py-1 text-sm"
+                      title="Save the selected tracks as a reusable playlist on your account"
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <ul className="max-h-[50vh] space-y-2 overflow-auto">
                 {items.map((r) => {
