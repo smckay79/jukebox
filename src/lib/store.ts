@@ -10,6 +10,19 @@ import type {
   Song,
 } from "./types";
 
+// Cap on the per-party history ring buffer. Protects Redis from an
+// overnight party pushing tens of thousands of entries into the JSON blob
+// (which we load + rewrite on every mutation). Oldest entries drop off the
+// front once we hit the cap.
+const HISTORY_MAX = 200;
+
+function pushHistory(party: Party, song: Song) {
+  party.history.push(song);
+  if (party.history.length > HISTORY_MAX) {
+    party.history = party.history.slice(-HISTORY_MAX);
+  }
+}
+
 // Seeded on every new party. Other bans get added live by the admin.
 const DEFAULT_BANS: BannedVideo[] = [
   {
@@ -330,7 +343,7 @@ export async function skipCurrent(
   // Playlist loop tracks don't count as "played" — they don't go into
   // history and we just advance to the next cursor item.
   if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
-    party.history.push(party.nowPlaying);
+    pushHistory(party, party.nowPlaying);
   }
   party.nowPlaying = null;
   promoteNext(party);
@@ -351,7 +364,7 @@ export async function songEnded(
     return { ok: true, party };
   }
   if (!isPlaylistTrack(party.nowPlaying)) {
-    party.history.push(party.nowPlaying);
+    pushHistory(party, party.nowPlaying);
   }
   party.nowPlaying = null;
   promoteNext(party);
@@ -548,6 +561,15 @@ export async function setCountry(
   }
   await persist(party);
   return { ok: true, party };
+}
+
+// Returns the played-songs history, newest first. Capped at HISTORY_MAX by
+// pushHistory, so the response stays small. The caller is responsible for
+// any admin-gating — this function doesn't check.
+export async function getPartyHistory(code: string): Promise<Song[] | null> {
+  const party = await storage().get(code.toUpperCase());
+  if (!party) return null;
+  return [...party.history].reverse();
 }
 
 export async function verifyAdmin(

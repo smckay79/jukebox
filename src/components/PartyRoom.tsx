@@ -9,6 +9,7 @@ import BannedList from "./BannedList";
 import ImportPlaylist from "./ImportPlaylist";
 import Marquee from "./Marquee";
 import NowPlayingCompact from "./NowPlayingCompact";
+import PartyHistory from "./PartyHistory";
 import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
@@ -24,6 +25,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // Signed-in user (from /api/auth/me via UserMenu). Null when logged out.
   // Drives the "Your saved playlists" section in ImportPlaylist.
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
+  // Bumped whenever the saved-playlist set changes outside ImportPlaylist
+  // (currently: PartyHistory saves a new playlist). ImportPlaylist watches
+  // this to re-fetch so the new entry shows up without a manual reload.
+  const [savedPlaylistsVersion, setSavedPlaylistsVersion] = useState(0);
   // QR is for inviting friends; hide by default on mobile (where the guest
   // already joined), and let hosts show it explicitly on the TV tab.
   const [showQR, setShowQR] = useState(false);
@@ -434,6 +439,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           country={party.country}
           authUser={authUser}
           isAdmin={isAdmin}
+          refreshKey={savedPlaylistsVersion}
         />
         {playlistStatus}
         <div>
@@ -455,6 +461,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         {showQR ? <QRCard code={party.code} /> : null}
         {isAdmin && adminKey ? (
           <>
+            <PartyHistory
+              code={party.code}
+              adminKey={adminKey}
+              authUser={authUser}
+              nowPlayingVideoId={party.nowPlaying?.videoId ?? null}
+              onSaved={() => setSavedPlaylistsVersion((v) => v + 1)}
+            />
             <AdminStats code={party.code} adminKey={adminKey} />
             <BannedList
               banned={party.banned}
@@ -609,6 +622,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               instead of sitting in a side column. */}
           {!showQR && isAdmin && adminKey ? (
             <>
+              <PartyHistory
+                code={party.code}
+                adminKey={adminKey}
+                authUser={authUser}
+                nowPlayingVideoId={party.nowPlaying?.videoId ?? null}
+                onSaved={() => setSavedPlaylistsVersion((v) => v + 1)}
+              />
               <AdminStats code={party.code} adminKey={adminKey} />
               <BannedList
                 banned={party.banned}
@@ -633,6 +653,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     with your friends so they can add songs.
                   </p>
                 </div>
+                <PartyHistory
+                  code={party.code}
+                  adminKey={adminKey}
+                  authUser={authUser}
+                  nowPlayingVideoId={party.nowPlaying?.videoId ?? null}
+                  onSaved={() => setSavedPlaylistsVersion((v) => v + 1)}
+                />
                 <AdminStats code={party.code} adminKey={adminKey} />
                 <BannedList
                   banned={party.banned}

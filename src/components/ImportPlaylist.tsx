@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import EditPlaylistModal from "./EditPlaylistModal";
 import { getAdminKey } from "@/lib/identity";
 import type {
   PublicParty,
@@ -50,6 +51,7 @@ export default function ImportPlaylist({
   country,
   authUser,
   isAdmin,
+  refreshKey,
 }: {
   code: string;
   bannedIds: Set<string>;
@@ -63,6 +65,10 @@ export default function ImportPlaylist({
   // still show the list to non-admin owners so they can see/manage their
   // own library; the Load button is just gated.
   isAdmin?: boolean;
+  // Bumped by the parent when something outside this component changed
+  // the saved-playlists list (e.g. PartyHistory just saved one). We
+  // re-fetch whenever it changes.
+  refreshKey?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
@@ -106,6 +112,10 @@ export default function ImportPlaylist({
   // Save-as-playlist flow: textbox for the new name + in-flight flag.
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
+  // When set, open the edit-playlist modal. Cleared on close/save.
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(
+    null,
+  );
 
   const loadSavedPlaylists = useCallback(async () => {
     setSavedLoading(true);
@@ -129,7 +139,7 @@ export default function ImportPlaylist({
   useEffect(() => {
     if (authUser) loadSavedPlaylists();
     else setSavedPlaylists([]);
-  }, [authUser, loadSavedPlaylists]);
+  }, [authUser, loadSavedPlaylists, refreshKey]);
 
   async function loadSavedIntoParty(id: string) {
     const key = getAdminKey(code);
@@ -501,6 +511,15 @@ export default function ImportPlaylist({
                       <button
                         type="button"
                         disabled={busyPlaylistId === p.id}
+                        onClick={() => setEditingPlaylistId(p.id)}
+                        className="rounded bg-white/10 px-2 py-0.5 text-white/80 hover:bg-white/20"
+                        title="Rename, reorder, or remove tracks"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyPlaylistId === p.id}
                         onClick={() => deleteSavedPlaylist(p.id, p.name)}
                         className="rounded bg-white/10 px-2 py-0.5 text-white/70 hover:bg-red-600/60 hover:text-white"
                         title="Delete"
@@ -734,6 +753,30 @@ export default function ImportPlaylist({
             </>
           ) : null}
         </div>
+      ) : null}
+
+      {editingPlaylistId ? (
+        <EditPlaylistModal
+          playlistId={editingPlaylistId}
+          onClose={() => setEditingPlaylistId(null)}
+          onSaved={(updated) => {
+            // Patch the summary in place so name/count update without a
+            // full re-fetch (keeps order stable). loadSavedPlaylists would
+            // also work but this avoids a flash.
+            setSavedPlaylists((ps) =>
+              ps.map((p) =>
+                p.id === updated.id
+                  ? {
+                      ...p,
+                      name: updated.name,
+                      count: updated.count,
+                      updatedAt: Date.now(),
+                    }
+                  : p,
+              ),
+            );
+          }}
+        />
       ) : null}
     </div>
   );
