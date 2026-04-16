@@ -467,6 +467,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           />
         )}
         <Marquee text={party.marquee} />
+        <h2 className="text-center text-lg font-semibold text-white">
+          Add a Video
+        </h2>
         <AddSong
           code={party.code}
           onAdded={setParty}
