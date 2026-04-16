@@ -28,10 +28,14 @@ body {
   min-height: 100vh;
 }
 
-/* YouTube IFrame API sets inline pixel width/height on the iframe.
-   Override so the player reflows when its container resizes (e.g. when
-   the QR sidebar toggles on desktop). */
-iframe[src*="youtube"] {
+/* YouTube IFrame API replaces the mount div with an iframe that has
+   fixed pixel width/height attributes. Absolutely position it inside the
+   aspect-ratio container and force it to fill, so the player reflows
+   when the layout changes (e.g. QR sidebar toggle). */
+.yt-mount,
+.yt-mount > iframe {
+  position: absolute !important;
+  inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
 }
