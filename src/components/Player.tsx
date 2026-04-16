@@ -152,7 +152,7 @@ export default function Player({
         />
         {!song && (
           <div className="flex h-full w-full items-center justify-center text-white/40">
-            Nothing playing — add a song to get started.
+            Waiting for the first banger…
           </div>
         )}
         {/* QR overlay so latecomers can scan straight off the TV. Pointer

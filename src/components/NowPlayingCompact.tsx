@@ -23,7 +23,7 @@ export default function NowPlayingCompact({
           ♪
         </div>
         <div className="min-w-0 flex-1 text-sm">
-          Nothing playing — add a song below.
+          Nothing playing yet — add a banger below!
         </div>
       </div>
     );

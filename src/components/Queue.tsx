@@ -1,6 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { PublicParty, Song } from "@/lib/types";
+
+const EMPTY_QUEUE_MESSAGES = [
+  "Search for the next video banger!",
+  "The stage is empty — who's up next?",
+  "No songs yet… be the hero this party needs.",
+  "The queue is lonely. Give it some love!",
+  "Silence is golden, but music is better.",
+  "Time to drop a banger in the queue!",
+  "Nothing queued up — fix that!",
+  "The DJ booth is open. Step up!",
+  "Add a song and become a legend.",
+  "Your party, your playlist. Let's go!",
+];
 
 export default function Queue({
   party,
@@ -17,10 +31,22 @@ export default function Queue({
   onRemove?: (song: Song) => void;
   onBan?: (song: Song) => void;
 }) {
+  const [msgIndex, setMsgIndex] = useState(() =>
+    Math.floor(Math.random() * EMPTY_QUEUE_MESSAGES.length),
+  );
+  useEffect(() => {
+    if (party.queue.length > 0) return;
+    const t = setInterval(
+      () => setMsgIndex((i) => (i + 1) % EMPTY_QUEUE_MESSAGES.length),
+      6000,
+    );
+    return () => clearInterval(t);
+  }, [party.queue.length]);
+
   if (party.queue.length === 0) {
     return (
       <div className="card p-6 text-center text-white/50">
-        Queue is empty. Paste a YouTube link to get it going.
+        {EMPTY_QUEUE_MESSAGES[msgIndex]}
       </div>
     );
   }
