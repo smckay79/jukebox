@@ -250,6 +250,23 @@ function toDataUrl(svg: string): string {
   return `url("data:image/svg+xml;charset=utf-8,${encoded}")`;
 }
 
+// Returns a semi-transparent RGBA background color derived from the party
+// theme, suitable for overlays like the MiniQR pill. Falls back to a dark
+// translucent black when no theme is set.
+export function getQRBackgroundColor(
+  theme: PartyTheme | undefined,
+): string {
+  if (!theme) return "rgba(0,0,0,0.7)";
+  if (theme.customImage) return "rgba(0,0,0,0.6)";
+  if (!isEra(theme.era)) return "rgba(0,0,0,0.7)";
+  const p = PALETTES[theme.era];
+  const hex = p.bg;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},0.85)`;
+}
+
 // Returns inline style for a full-screen background div. Returns null when
 // the theme has nothing to render (let the default body gradient show).
 export function buildBackgroundStyle(

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Marquee from "./Marquee";
 import MiniQR from "./MiniQR";
 import Player from "./Player";
+import { getQRBackgroundColor } from "@/lib/background";
 import type { PublicParty } from "@/lib/types";
 
 // TV / Android / Fire TV "display" mode. Strips the host + guest chrome
@@ -31,6 +32,11 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
   const partyRef = useRef(party);
   partyRef.current = party;
+
+  const qrBg = useMemo(
+    () => getQRBackgroundColor(party.theme),
+    [party.theme],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -166,16 +172,13 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
         )}
       </div>
 
-      {/* Player fills the remaining vertical space. We don't pass
-          partyCode here — Player would otherwise render its own 96px
-          mini-QR overlay, and we want the bigger TV-sized one below. */}
       <div className="relative min-h-0 flex-1 bg-black">
         <Player song={party.nowPlaying} onEnded={onEnded} fill />
-        {/* TV-sized join QR. 144px reads comfortably from across a room;
-            the Player's built-in 96px version is fine for a web browser
-            but too small for a TV across a living room. */}
+        {/* Bottom gradient covers YouTube's end-screen cards/links so
+            they're neither visible nor clickable on the TV display. */}
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
         <div className="pointer-events-none absolute bottom-4 right-4">
-          <MiniQR code={party.code} size={144} />
+          <MiniQR code={party.code} size={96} bgColor={qrBg} />
         </div>
       </div>
 
