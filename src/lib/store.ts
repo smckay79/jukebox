@@ -242,6 +242,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 export async function createParty(
   name: string,
   hostUserId?: string,
+  theme?: PartyTheme,
 ): Promise<Party> {
   const s = storage();
   let code = makeCode();
@@ -258,6 +259,7 @@ export async function createParty(
     nowPlaying: null,
     history: [],
     banned: DEFAULT_BANS.slice(),
+    theme,
   };
   await persist(party);
   await addPartyToIndex(party.code);

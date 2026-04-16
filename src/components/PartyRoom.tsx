@@ -692,20 +692,23 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     You&apos;re the host
                   </div>
                   <p>
-                    Keep this tab open on the TV. Share the QR or the code{" "}
+                    Share the QR or the code{" "}
                     <span className="font-mono text-white">{party.code}</span>{" "}
                     with your friends so they can add songs.
                   </p>
                   {adminPin ? (
-                    <p className="mt-2 border-t border-white/10 pt-2">
-                      Admin PIN:{" "}
-                      <span className="font-mono font-semibold text-white">
-                        {adminPin}
-                      </span>
-                      <span className="ml-1 text-xs text-white/40">
-                        — enter on the Android app to skip songs
-                      </span>
-                    </p>
+                    <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                      <p>
+                        Admin PIN:{" "}
+                        <span className="font-mono font-semibold text-white">
+                          {adminPin}
+                        </span>
+                      </p>
+                      <p className="text-xs text-white/40">
+                        Enter this PIN in the TV app to enable skipping songs
+                        with your remote control.
+                      </p>
+                    </div>
                   ) : null}
                 </div>
                 <PartyHistory
