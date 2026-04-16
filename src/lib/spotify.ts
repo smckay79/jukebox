@@ -160,14 +160,12 @@ export async function fetchSpotifyPlaylist(
   const headers = { authorization: `Bearer ${token}` };
 
   // First page also gives us the playlist name + the first ~100 tracks.
-  // Note: no `market` param. `from_token` only works with user OAuth
-  // tokens (not Client Credentials), and hard-coding a market would
-  // filter out tracks unavailable in that country. The YouTube match
-  // step handles regional availability downstream.
+  // Fetch without a `fields` filter — Spotify's field projection has
+  // been unreliable with dot-notation and nested parentheses across API
+  // versions, and the full playlist JSON (~100KB for 100 tracks) is
+  // small enough that the bandwidth saving isn't worth the fragility.
   const metaRes = await fetch(
-    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=${encodeURIComponent(
-      "id,name,tracks.items(track(id,name,duration_ms,is_local,type,artists(name),album(name,images))),tracks.next",
-    )}`,
+    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}`,
     { headers, cache: "no-store" },
   );
   if (!metaRes.ok) {
@@ -218,7 +216,13 @@ export async function fetchSpotifyPlaylist(
 
   const tracks: SpotifyTrack[] = [];
   const firstPage = meta.tracks;
+  const rawCount = firstPage?.items?.length ?? 0;
   if (firstPage?.items) extractTracks(firstPage.items, tracks);
+  console.log(
+    "[spotify] playlist parsed",
+    playlistId,
+    `raw=${rawCount} usable=${tracks.length} next=${!!firstPage?.next}`,
+  );
 
   // Paginate if there are more items and we're under the cap.
   let next: string | null | undefined = firstPage?.next ?? null;
