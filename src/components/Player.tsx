@@ -138,7 +138,7 @@ export default function Player({
         className={
           fill
             ? "relative h-full w-full bg-black"
-            : "relative aspect-video w-full bg-black"
+            : "relative aspect-video w-full overflow-hidden bg-black"
         }
       >
         {song ? (

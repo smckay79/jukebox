@@ -589,7 +589,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           (showQR ? "md:grid-cols-[1fr_360px]" : "md:grid-cols-1")
         }
       >
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <AddSong
             code={party.code}
             onAdded={setParty}
