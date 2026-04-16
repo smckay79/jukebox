@@ -10,8 +10,8 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -85,17 +85,17 @@ fun PlayerScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth(0.4f)
                     .padding(bottom = 24.dp)
                     .focusRequester(focusRequester)
                     .focusable(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    contentColor = Color.White,
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    contentColor = Color.White.copy(alpha = 0.7f),
                 ),
             ) {
-                Text("Skip", fontSize = 16.sp)
+                Text("Skip", fontSize = 12.sp)
             }
         }
     }
