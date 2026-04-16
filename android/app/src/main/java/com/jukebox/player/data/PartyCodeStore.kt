@@ -19,6 +19,7 @@ data class RecentParty(
     val code: String,
     val name: String,
     val joinedAt: Long,
+    val adminKey: String? = null,
 )
 
 private const val MAX_HISTORY = 10
@@ -54,12 +55,12 @@ class PartyCodeStore(private val context: Context) {
         }
     }
 
-    suspend fun addToHistory(code: String, name: String) {
+    suspend fun addToHistory(code: String, name: String, adminKey: String? = null) {
         val normalized = code.trim().uppercase()
         context.codeDataStore.edit { prefs ->
             val existing = parseHistory(prefs[HISTORY_KEY]).toMutableList()
             existing.removeAll { it.code == normalized }
-            existing.add(0, RecentParty(normalized, name, System.currentTimeMillis()))
+            existing.add(0, RecentParty(normalized, name, System.currentTimeMillis(), adminKey))
             if (existing.size > MAX_HISTORY) {
                 existing.subList(MAX_HISTORY, existing.size).clear()
             }
@@ -82,6 +83,7 @@ class PartyCodeStore(private val context: Context) {
                         code = obj.getString("code"),
                         name = obj.optString("name", "Party"),
                         joinedAt = obj.optLong("joinedAt", 0L),
+                        adminKey = obj.optString("adminKey", null),
                     )
                 }
             } catch (_: Exception) {
@@ -96,6 +98,7 @@ class PartyCodeStore(private val context: Context) {
                     put("code", p.code)
                     put("name", p.name)
                     put("joinedAt", p.joinedAt)
+                    if (p.adminKey != null) put("adminKey", p.adminKey)
                 })
             }
             return arr.toString()

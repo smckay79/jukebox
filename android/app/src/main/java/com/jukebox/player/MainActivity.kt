@@ -49,15 +49,16 @@ class MainActivity : ComponentActivity() {
 
                 when (val code = savedCode) {
                     null, "" -> CodeEntryScreen(
-                        onSubmit = { entered, pin ->
+                        onSubmit = { entered, pin, savedKey ->
                             scope.launch {
                                 store.setCode(entered)
                                 val name = fetchPartyName(baseUrl, entered)
-                                store.addToHistory(entered, name)
-                                if (pin != null) {
-                                    val key = verifyPin(baseUrl, entered, pin)
-                                    if (key != null) store.setAdminKey(key)
+                                var adminKey = savedKey
+                                if (pin != null && adminKey == null) {
+                                    adminKey = verifyPin(baseUrl, entered, pin)
                                 }
+                                if (adminKey != null) store.setAdminKey(adminKey)
+                                store.addToHistory(entered, name, adminKey)
                             }
                         },
                         recentParties = history,

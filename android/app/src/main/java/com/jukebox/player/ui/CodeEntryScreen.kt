@@ -39,7 +39,7 @@ private const val PIN_LENGTH = 4
 
 @Composable
 fun CodeEntryScreen(
-    onSubmit: (code: String, pin: String?) -> Unit,
+    onSubmit: (code: String, pin: String?, savedAdminKey: String?) -> Unit,
     recentParties: List<RecentParty> = emptyList(),
 ) {
     var input by remember { mutableStateOf("") }
@@ -47,7 +47,7 @@ fun CodeEntryScreen(
     val valid = input.length == CODE_LENGTH
 
     fun submit() {
-        if (valid) onSubmit(input, pin.ifBlank { null })
+        if (valid) onSubmit(input, pin.ifBlank { null }, null)
     }
 
     LazyColumn(
@@ -128,7 +128,7 @@ fun CodeEntryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clickable { onSubmit(party.code, null) },
+                        .clickable { onSubmit(party.code, null, party.adminKey) },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -141,10 +141,19 @@ fun CodeEntryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = party.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = party.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                if (party.adminKey != null) {
+                                    Text(
+                                        text = " · Admin",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                    )
+                                }
+                            }
                             Text(
                                 text = "${party.code}  ·  ${timeAgo(party.joinedAt)}",
                                 style = MaterialTheme.typography.bodySmall,
