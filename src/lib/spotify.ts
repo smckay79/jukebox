@@ -159,30 +159,16 @@ export async function fetchSpotifyPlaylist(
 
   const headers = { authorization: `Bearer ${token}` };
 
-  // First page also gives us the playlist name + the first ~100 tracks.
-  // Fetch without a `fields` filter — Spotify's field projection has
-  // been unreliable with dot-notation and nested parentheses across API
-  // versions, and the full playlist JSON (~100KB for 100 tracks) is
-  // small enough that the bandwidth saving isn't worth the fragility.
+  // --- Step 1: playlist metadata (name). Lightweight call. ---
+  const pid = encodeURIComponent(playlistId);
   const metaRes = await fetch(
-    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}`,
+    `https://api.spotify.com/v1/playlists/${pid}?fields=${encodeURIComponent("id,name")}`,
     { headers, cache: "no-store" },
   );
   if (!metaRes.ok) {
-    // Log the full error body so operator-facing logs include the
-    // Spotify reason (e.g. "Non existing id" vs "Insufficient client
-    // scope"). The client still sees a friendly message.
     const body = await metaRes.text().catch(() => "");
-    console.error(
-      "[spotify] playlist fetch failed",
-      metaRes.status,
-      playlistId,
-      body.slice(0, 300),
-    );
-    if (metaRes.status === 401) {
-      // Invalidate the cached token so the next call refreshes it.
-      getCache().current = null;
-    }
+    console.error("[spotify] playlist meta failed", metaRes.status, playlistId, body.slice(0, 300));
+    if (metaRes.status === 401) getCache().current = null;
     if (metaRes.status === 404) {
       return {
         error:
@@ -191,11 +177,6 @@ export async function fetchSpotifyPlaylist(
       };
     }
     if (metaRes.status === 403) {
-      // Spotify added a rule (~2025) that the Spotify account that owns
-      // the developer app must have an active Premium subscription,
-      // otherwise every playlist-endpoint call 403s with this exact
-      // message. Detect it and surface a specific fix-it note so the
-      // host doesn't waste time checking playlist visibility.
       if (/premium subscription/i.test(body)) {
         return {
           error:
@@ -214,24 +195,30 @@ export async function fetchSpotifyPlaylist(
   const meta = (await metaRes.json()) as SpotifyPlaylistResponse;
   const name = (meta.name ?? "").toString().slice(0, 200) || "Spotify playlist";
 
+  // --- Step 2: fetch tracks from the dedicated /tracks endpoint. ---
+  // The parent /playlists/{id} endpoint sometimes returns an empty
+  // tracks.items array for Client Credentials tokens (particularly
+  // since mid-2025). The dedicated /tracks endpoint is reliable.
   const tracks: SpotifyTrack[] = [];
-  const firstPage = meta.tracks;
-  const rawCount = firstPage?.items?.length ?? 0;
-  if (firstPage?.items) extractTracks(firstPage.items, tracks);
-  console.log(
-    "[spotify] playlist parsed",
-    playlistId,
-    `raw=${rawCount} usable=${tracks.length} next=${!!firstPage?.next}`,
-  );
+  let tracksUrl: string | null =
+    `https://api.spotify.com/v1/playlists/${pid}/tracks?limit=100`;
 
-  // Paginate if there are more items and we're under the cap.
-  let next: string | null | undefined = firstPage?.next ?? null;
-  while (next && tracks.length < PLAYLIST_MAX_TRACKS) {
-    const pageRes = await fetch(next, { headers, cache: "no-store" });
-    if (!pageRes.ok) break; // partial result is better than none
+  while (tracksUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
+    const pageRes = await fetch(tracksUrl, { headers, cache: "no-store" });
+    if (!pageRes.ok) {
+      console.error("[spotify] tracks page failed", pageRes.status, playlistId);
+      if (pageRes.status === 401) getCache().current = null;
+      break;
+    }
     const page = (await pageRes.json()) as SpotifyTracksPage;
+    const rawCount = page.items?.length ?? 0;
     if (page.items) extractTracks(page.items, tracks);
-    next = page.next ?? null;
+    console.log(
+      "[spotify] tracks page",
+      playlistId,
+      `raw=${rawCount} usable=${tracks.length} more=${!!page.next}`,
+    );
+    tracksUrl = page.next ?? null;
   }
 
   return {
