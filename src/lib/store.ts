@@ -36,9 +36,12 @@ const DEFAULT_BANS: BannedVideo[] = [
 // Legacy records (created before `banned` existed) need the field backfilled
 // so every read after the upgrade returns a usable shape. Applied uniformly
 // by both storage backends.
-function normalizeParty(p: Party | (Party & { banned?: BannedVideo[] })): Party {
+function normalizeParty(p: Party | (Party & { banned?: BannedVideo[]; adminPin?: string })): Party {
   if (!Array.isArray((p as Party).banned)) {
     (p as Party).banned = DEFAULT_BANS.slice();
+  }
+  if (!(p as Party).adminPin) {
+    (p as Party).adminPin = makeAdminPin();
   }
   return p as Party;
 }
@@ -129,6 +132,11 @@ function makeAdminKey(): string {
   return randomBytes(24).toString("base64url");
 }
 
+function makeAdminPin(): string {
+  const n = randomBytes(2).readUInt16BE(0) % 10000;
+  return n.toString().padStart(4, "0");
+}
+
 function makeId(): string {
   return randomBytes(8).toString("hex");
 }
@@ -158,9 +166,6 @@ export function toPublicParty(p: Party): PublicParty {
       : undefined,
     country: p.country,
     endedAt: p.endedAt,
-    expiresAt: p.hostUserId
-      ? undefined
-      : p.createdAt + ANONYMOUS_PARTY_TTL_MS,
   };
 }
 
@@ -234,8 +239,6 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 // ---------- public API ----------
 
-const ANONYMOUS_PARTY_TTL_MS = 60 * 60 * 1000; // 1 hour
-
 export async function createParty(
   name: string,
   hostUserId?: string,
@@ -247,6 +250,7 @@ export async function createParty(
   const party: Party = {
     code,
     adminKey: makeAdminKey(),
+    adminPin: makeAdminPin(),
     name: name.trim() || "The Party",
     createdAt: Date.now(),
     hostUserId,
@@ -260,28 +264,6 @@ export async function createParty(
   return party;
 }
 
-export async function claimParty(
-  code: string,
-  hostUserId: string,
-): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
-  const s = storage();
-  const party = await s.get(code.toUpperCase());
-  if (!party) return { ok: false, error: "Party not found" };
-  if (party.hostUserId) return { ok: false, error: "Party already claimed" };
-  party.hostUserId = hostUserId;
-  await persist(party);
-  return { ok: true, party };
-}
-
-export function isPartyExpired(party: Party | PublicParty): boolean {
-  if ("hostUserId" in party && party.hostUserId) return false;
-  if ("expiresAt" in party && !party.expiresAt) return false;
-  const expiresAt =
-    "expiresAt" in party && party.expiresAt
-      ? party.expiresAt
-      : party.createdAt + ANONYMOUS_PARTY_TTL_MS;
-  return Date.now() > expiresAt;
-}
 
 export async function getParty(code: string): Promise<Party | null> {
   if (!code) return null;
@@ -305,12 +287,6 @@ export async function addSong(
   if (!party) return { ok: false, error: "Party not found" };
   if (party.endedAt) {
     return { ok: false, error: "This party has ended" };
-  }
-  if (isPartyExpired(party)) {
-    return {
-      ok: false,
-      error: "This party has reached the 1-hour limit. The host needs to sign in to continue.",
-    };
   }
 
   if (party.banned.some((b) => b.videoId === input.videoId)) {
@@ -685,6 +661,18 @@ export async function verifyAdmin(
   const party = await storage().get(code.toUpperCase());
   if (!party) return false;
   return timingSafeEqual(party.adminKey, key);
+}
+
+export async function verifyPin(
+  code: string,
+  pin: string | null | undefined,
+): Promise<string | null> {
+  if (!pin) return null;
+  const party = await storage().get(code.toUpperCase());
+  if (!party) return null;
+  if (!party.adminPin) return null;
+  if (!timingSafeEqual(party.adminPin, pin)) return null;
+  return party.adminKey;
 }
 
 // ---------- party index (for admin portal) ----------
