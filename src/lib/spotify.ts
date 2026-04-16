@@ -203,13 +203,34 @@ export async function fetchSpotifyPlaylist(
   let tracksUrl: string | null =
     `https://api.spotify.com/v1/playlists/${pid}/tracks?limit=100`;
 
+  let firstTracksPage = true;
   while (tracksUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
     const pageRes = await fetch(tracksUrl, { headers, cache: "no-store" });
     if (!pageRes.ok) {
-      console.error("[spotify] tracks page failed", pageRes.status, playlistId);
+      const body = await pageRes.text().catch(() => "");
+      console.error("[spotify] tracks page failed", pageRes.status, playlistId, body.slice(0, 300));
       if (pageRes.status === 401) getCache().current = null;
-      break;
+      // Propagate the first-page failure as a proper error so the client
+      // sees the real reason instead of "No playable videos in that playlist."
+      if (firstTracksPage) {
+        if (pageRes.status === 403) {
+          if (/premium subscription/i.test(body)) {
+            return {
+              error:
+                "Spotify requires the developer account that owns this app to have an active Premium subscription.",
+              status: 400,
+            };
+          }
+          return { error: `Spotify refused the tracks request (403): ${body.slice(0, 200)}`, status: 400 };
+        }
+        if (pageRes.status === 404) {
+          return { error: "Spotify playlist tracks not found (404).", status: 400 };
+        }
+        return { error: `Spotify tracks request failed (${pageRes.status}): ${body.slice(0, 200)}`, status: 502 };
+      }
+      break; // subsequent pages: partial result is better than nothing
     }
+    firstTracksPage = false;
     const page = (await pageRes.json()) as SpotifyTracksPage;
     const rawCount = page.items?.length ?? 0;
     if (page.items) extractTracks(page.items, tracks);
