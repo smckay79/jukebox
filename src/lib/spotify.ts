@@ -195,13 +195,20 @@ export async function fetchSpotifyPlaylist(
   const meta = (await metaRes.json()) as SpotifyPlaylistResponse;
   const name = (meta.name ?? "").toString().slice(0, 200) || "Spotify playlist";
 
-  // --- Step 2: fetch tracks from the dedicated /tracks endpoint. ---
-  // The parent /playlists/{id} endpoint sometimes returns an empty
-  // tracks.items array for Client Credentials tokens (particularly
-  // since mid-2025). The dedicated /tracks endpoint is reliable.
+  // --- Step 2: fetch tracks. ---
+  // Strategy: try the dedicated /tracks endpoint first (it's the
+  // Spotify-recommended way). If that 403s (Client Credentials
+  // restrictions tightened in 2025), fall back to fetching the full
+  // playlist object with a market param — that returns embedded
+  // tracks.items that the fields-only metadata call strips out.
   const tracks: SpotifyTrack[] = [];
+
+  // Try /tracks with a market param. Without a market, Client
+  // Credentials has no implicit locale and Spotify may 403 or return
+  // empty data. "US" is a safe default — it doesn't filter out tracks,
+  // it just tells Spotify which catalog to resolve against.
   let tracksUrl: string | null =
-    `https://api.spotify.com/v1/playlists/${pid}/tracks?limit=100`;
+    `https://api.spotify.com/v1/playlists/${pid}/tracks?limit=100&market=US`;
 
   let firstTracksPage = true;
   while (tracksUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
@@ -210,23 +217,40 @@ export async function fetchSpotifyPlaylist(
       const body = await pageRes.text().catch(() => "");
       console.error("[spotify] tracks page failed", pageRes.status, playlistId, body.slice(0, 300));
       if (pageRes.status === 401) getCache().current = null;
-      // Propagate the first-page failure as a proper error so the client
-      // sees the real reason instead of "No playable videos in that playlist."
+
+      // /tracks 403'd — fall back to the full playlist endpoint with
+      // a market param which may include embedded tracks.
       if (firstTracksPage) {
-        if (pageRes.status === 403) {
-          if (/premium subscription/i.test(body)) {
-            return {
-              error:
-                "Spotify requires the developer account that owns this app to have an active Premium subscription.",
-              status: 400,
-            };
+        console.log("[spotify] /tracks 403, trying full playlist with market=US");
+        const fallbackRes = await fetch(
+          `https://api.spotify.com/v1/playlists/${pid}?market=US`,
+          { headers, cache: "no-store" },
+        );
+        if (fallbackRes.ok) {
+          const full = (await fallbackRes.json()) as SpotifyPlaylistResponse;
+          const page = full.tracks;
+          if (page?.items) {
+            extractTracks(page.items, tracks);
+            console.log("[spotify] fallback got", page.items.length, "raw,", tracks.length, "usable");
+            // Paginate via next if present
+            let nextUrl = page.next ?? null;
+            while (nextUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
+              const np = await fetch(nextUrl, { headers, cache: "no-store" });
+              if (!np.ok) break;
+              const npData = (await np.json()) as SpotifyTracksPage;
+              if (npData.items) extractTracks(npData.items, tracks);
+              nextUrl = npData.next ?? null;
+            }
           }
-          return { error: `Spotify refused the tracks request (403): ${body.slice(0, 200)}`, status: 400 };
+          if (tracks.length > 0) break;
         }
-        if (pageRes.status === 404) {
-          return { error: "Spotify playlist tracks not found (404).", status: 400 };
+        // Both approaches failed — surface the error.
+        if (tracks.length === 0) {
+          return {
+            error: `Spotify won't return track data for this playlist (${pageRes.status}). This is a Spotify API restriction for third-party apps — try a different playlist, or check that your developer app has Extended Quota Mode enabled in the Spotify Dashboard.`,
+            status: 400,
+          };
         }
-        return { error: `Spotify tracks request failed (${pageRes.status}): ${body.slice(0, 200)}`, status: 502 };
       }
       break; // subsequent pages: partial result is better than nothing
     }
