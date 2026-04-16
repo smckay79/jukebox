@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { setAdminKey, setDisplayName } from "@/lib/identity";
+import { setAdminKey, setAdminPin, setDisplayName } from "@/lib/identity";
 
 export default function CreatePartyForm() {
   const router = useRouter();
@@ -28,9 +28,11 @@ export default function CreatePartyForm() {
       const data = (await res.json()) as {
         code: string;
         adminKey: string;
+        adminPin: string;
         name: string;
       };
       setAdminKey(data.code, data.adminKey);
+      if (data.adminPin) setAdminPin(data.code, data.adminPin);
       if (host.trim()) setDisplayName(host.trim());
       router.push(`/party/${data.code}?host=1`);
     } finally {

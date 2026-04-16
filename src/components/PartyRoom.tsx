@@ -17,7 +17,7 @@ import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
 import UserMenu from "./UserMenu";
-import { getAdminKey, getUserId } from "@/lib/identity";
+import { getAdminKey, getAdminPin, getUserId } from "@/lib/identity";
 import type {
   PartyRecap,
   PartyTheme,
@@ -30,6 +30,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
   const [userId, setUserId] = useState("");
   const [adminKey, setAdmin] = useState<string | null>(null);
+  const [adminPin, setPin] = useState<string | null>(null);
   // Signed-in user (from /api/auth/me via UserMenu). Null when logged out.
   // Drives the "Your saved playlists" section in ImportPlaylist.
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
@@ -89,6 +90,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   useEffect(() => {
     setUserId(getUserId());
     setAdmin(getAdminKey(initial.code));
+    setPin(getAdminPin(initial.code));
   }, [initial.code]);
 
   const refresh = useCallback(async () => {
@@ -691,6 +693,17 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     <span className="font-mono text-white">{party.code}</span>{" "}
                     with your friends so they can add songs.
                   </p>
+                  {adminPin ? (
+                    <p className="mt-2 border-t border-white/10 pt-2">
+                      Admin PIN:{" "}
+                      <span className="font-mono font-semibold text-white">
+                        {adminPin}
+                      </span>
+                      <span className="ml-1 text-xs text-white/40">
+                        — enter on the Android app to skip songs
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
                 <PartyHistory
                   code={party.code}

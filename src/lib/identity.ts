@@ -54,3 +54,17 @@ export function clearAdminKey(code: string) {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(adminKeyFor(code));
 }
+
+function adminPinFor(code: string) {
+  return `jukebox.pin.${code.toUpperCase()}`;
+}
+
+export function getAdminPin(code: string): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(adminPinFor(code));
+}
+
+export function setAdminPin(code: string, pin: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(adminPinFor(code), pin);
+}
