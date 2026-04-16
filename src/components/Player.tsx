@@ -142,7 +142,9 @@ export default function Player({
         }
       >
         {song ? (
-          <div ref={mountRef} className="yt-mount absolute inset-0" />
+          <div className="yt-wrap absolute inset-0">
+            <div ref={mountRef} />
+          </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center text-white/40">
             Nothing playing — add a song to get started.

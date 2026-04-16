@@ -28,14 +28,16 @@ body {
   min-height: 100vh;
 }
 
-/* YouTube IFrame API replaces the mount div with an iframe that has
-   fixed pixel width/height attributes. Absolutely position it inside the
-   aspect-ratio container and force it to fill, so the player reflows
-   when the layout changes (e.g. QR sidebar toggle). */
-.yt-mount,
-.yt-mount > iframe {
+/* YouTube IFrame API *replaces* the mount div with an iframe carrying
+   fixed pixel width/height. .yt-wrap is a persistent parent that
+   survives the replacement; we force both it and the injected iframe to
+   fill the aspect-ratio container so the player reflows on layout
+   changes (e.g. QR sidebar toggle). */
+.yt-wrap {
   position: absolute !important;
   inset: 0 !important;
+}
+.yt-wrap > iframe {
   width: 100% !important;
   height: 100% !important;
 }
