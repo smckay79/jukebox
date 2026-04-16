@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     code: party.code,
     adminKey: party.adminKey,
+    adminPin: party.adminPin,
     name: party.name,
   });
 }
