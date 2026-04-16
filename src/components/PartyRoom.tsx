@@ -307,6 +307,14 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
   const isAdmin = !!adminKey;
 
+  // bannedIds must be above the endedAt early-return — hooks can't be
+  // called after a conditional return without violating the Rules of
+  // Hooks (which causes "Rendered fewer hooks than expected" crash).
+  const bannedIds = useMemo(
+    () => new Set(party.banned.map((b) => b.videoId)),
+    [party.banned],
+  );
+
   // Party is over → swap the entire room for the recap view. Everything
   // below this point assumes an active party; the ended view is its own
   // self-contained layout.
@@ -323,11 +331,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
       </>
     );
   }
-
-  const bannedIds = useMemo(
-    () => new Set(party.banned.map((b) => b.videoId)),
-    [party.banned],
-  );
 
   // Tiny status pill for the background playlist — rendered on both
   // mobile and desktop. Shows whether the current track is a loop pick,

@@ -79,58 +79,6 @@ export async function matchMusicVideo(
   return best;
 }
 
-// Match from an explicit title + artist + duration. Used by the
-// Spotify importer, where we already know the song metadata cleanly
-// and don't need to parse it out of a YouTube title string. Unlike
-// matchMusicVideo there's no source videoId to avoid colliding with,
-// so the best innertube hit wins if it scores above threshold.
-export interface TitleArtistMatchInput {
-  title: string;
-  artist?: string;
-  durationSeconds?: number;
-}
-
-export async function matchFromTitleArtist(
-  input: TitleArtistMatchInput,
-): Promise<MatchOutput | null> {
-  const title = input.title.trim();
-  if (!title) return null;
-  const artist = (input.artist ?? "").trim();
-
-  const query = artist
-    ? `${artist} ${title} official music video`
-    : `${title} official music video`;
-
-  let results: InnertubeResult[] = [];
-  try {
-    results = await searchInnertube(query, 8);
-  } catch {
-    return null;
-  }
-
-  let best: MatchOutput | null = null;
-  for (const r of results) {
-    const score = scoreMatch(r, {
-      song: title,
-      artist: artist || undefined,
-      durationSeconds: input.durationSeconds,
-    });
-    if (score < MIN_SCORE) continue;
-    if (!best || score > best.score) {
-      best = {
-        videoId: r.videoId,
-        title: r.title,
-        channelTitle: r.channelTitle,
-        thumbnail: r.thumbnail,
-        duration: r.duration,
-        durationSeconds: r.durationSeconds,
-        score,
-      };
-    }
-  }
-  return best;
-}
-
 // ---------- parsing ----------
 
 function parseTrackTitle(input: MatchInput): {
