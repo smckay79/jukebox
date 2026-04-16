@@ -280,6 +280,18 @@ export default function ImportPlaylist({
     e.preventDefault();
     const v = raw.trim();
     if (!v) return;
+    // Auto-detect the source from the URL so the user doesn't need to
+    // manually toggle tabs. If it smells like Spotify, switch; if it
+    // smells like YouTube, switch back. Otherwise use whatever tab is
+    // currently active.
+    let effectiveSource = source;
+    if (/spotify\.com\/|^spotify:/i.test(v)) {
+      effectiveSource = "spotify";
+      setSource("spotify");
+    } else if (/youtube\.com\/|youtu\.be\/|^PL[A-Za-z0-9_-]/i.test(v)) {
+      effectiveSource = "youtube";
+      setSource("youtube");
+    }
     setLoading(true);
     setError(null);
     setFlash(null);
@@ -291,7 +303,7 @@ export default function ImportPlaylist({
     // sees the change and bails out.
     matchGen.current += 1;
     try {
-      if (source === "spotify") {
+      if (effectiveSource === "spotify") {
         const qs = new URLSearchParams({ id: v });
         const res = await fetch(`/api/spotify/playlist?${qs.toString()}`, {
           cache: "no-store",
