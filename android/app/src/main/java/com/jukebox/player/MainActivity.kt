@@ -8,28 +8,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
 import com.jukebox.player.data.PartyCodeStore
 import com.jukebox.player.ui.CodeEntryScreen
 import com.jukebox.player.ui.PlayerScreen
 import com.jukebox.player.ui.theme.JukeboxPlayerTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
-// Single-activity app. Renders either the code-entry form or the
-// WebView player, depending on whether a code is saved. Keeping it in
-// one Activity keeps WebView state coherent when the user hits Back —
-// we just swap composables rather than tearing down a second Activity.
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Full-bleed display under the status bar + nav bar. Combined
-        // with the landscape orientation lock in the manifest, this
-        // gives us the fullscreen feel without asking for any special
-        // permissions.
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility = (
@@ -42,24 +38,28 @@ class MainActivity : ComponentActivity() {
             )
 
         val store = PartyCodeStore(applicationContext)
+        val baseUrl = BuildConfig.BASE_URL
 
         setContent {
             JukeboxPlayerTheme {
                 val scope = rememberCoroutineScope()
                 val savedCode by store.codeFlow.collectAsState(initial = null)
+                val history by store.historyFlow.collectAsState(initial = emptyList())
 
                 when (val code = savedCode) {
-                    // null = DataStore hasn't emitted yet. Treat the
-                    // empty-string case as "no code saved" explicitly
-                    // so the splash flicker is minimal.
                     null, "" -> CodeEntryScreen(
                         onSubmit = { entered ->
-                            scope.launch { store.setCode(entered) }
+                            scope.launch {
+                                store.setCode(entered)
+                                val name = fetchPartyName(baseUrl, entered)
+                                store.addToHistory(entered, name)
+                            }
                         },
+                        recentParties = history,
                     )
                     else -> PlayerScreen(
                         code = code,
-                        baseUrl = BuildConfig.BASE_URL,
+                        baseUrl = baseUrl,
                         onExit = {
                             lifecycleScope.launch { store.clear() }
                         },
@@ -69,3 +69,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private suspend fun fetchPartyName(baseUrl: String, code: String): String =
+    withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/api/party/${code.trim().uppercase()}")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 5_000
+            try {
+                if (conn.responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    JSONObject(body).optString("name", "Party")
+                } else {
+                    "Party"
+                }
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            "Party"
+        }
+    }
