@@ -1,8 +1,13 @@
 import Link from "next/link";
 import JoinForm from "@/components/JoinForm";
 import CreatePartyForm from "@/components/CreatePartyForm";
+import { getSessionUser } from "@/lib/auth";
+import { isAdminEmail } from "@/lib/admin";
 
-export default function Home() {
+export default async function Home() {
+  const user = await getSessionUser();
+  const showAdmin = user && isAdminEmail(user.email);
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <header className="mb-10 flex items-center justify-between">
@@ -12,6 +17,14 @@ export default function Home() {
           </span>
           Jukebox
         </Link>
+        {showAdmin && (
+          <Link
+            href="/admin"
+            className="text-sm text-white/40 hover:text-white/70"
+          >
+            Admin
+          </Link>
+        )}
       </header>
 
       <section className="mb-12">

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { createParty } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -12,7 +13,8 @@ export async function POST(req: Request) {
     /* allow empty body */
   }
   const name = (body.name ?? "").toString().slice(0, 60);
-  const party = await createParty(name);
+  const user = await getSessionUser();
+  const party = await createParty(name, user?.id);
   return NextResponse.json({
     code: party.code,
     adminKey: party.adminKey,

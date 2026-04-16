@@ -58,6 +58,7 @@ export interface Party {
   adminKey: string; // secret, only creator holds
   name: string;
   createdAt: number;
+  hostUserId?: string;
   queue: Song[];
   nowPlaying: Song | null;
   history: Song[]; // played songs
@@ -116,6 +117,9 @@ export interface PublicParty {
   // When set, the party has been ended by the host — the client switches
   // to a recap view.
   endedAt?: number;
+  // Epoch ms at which the party expires for anonymous hosts (createdAt + 1hr).
+  // Undefined for signed-in hosts (unlimited).
+  expiresAt?: number;
 }
 
 // Payload returned by POST /api/party/[code]/end and rendered on the

@@ -158,6 +158,9 @@ export function toPublicParty(p: Party): PublicParty {
       : undefined,
     country: p.country,
     endedAt: p.endedAt,
+    expiresAt: p.hostUserId
+      ? undefined
+      : p.createdAt + ANONYMOUS_PARTY_TTL_MS,
   };
 }
 
@@ -231,10 +234,14 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 // ---------- public API ----------
 
-export async function createParty(name: string): Promise<Party> {
+const ANONYMOUS_PARTY_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+export async function createParty(
+  name: string,
+  hostUserId?: string,
+): Promise<Party> {
   const s = storage();
   let code = makeCode();
-  // collision-avoidance; probability is tiny, but be safe
   for (let i = 0; i < 5 && (await s.get(code)); i++) code = makeCode();
 
   const party: Party = {
@@ -242,13 +249,38 @@ export async function createParty(name: string): Promise<Party> {
     adminKey: makeAdminKey(),
     name: name.trim() || "The Party",
     createdAt: Date.now(),
+    hostUserId,
     queue: [],
     nowPlaying: null,
     history: [],
     banned: DEFAULT_BANS.slice(),
   };
   await persist(party);
+  await addPartyToIndex(party.code);
   return party;
+}
+
+export async function claimParty(
+  code: string,
+  hostUserId: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (party.hostUserId) return { ok: false, error: "Party already claimed" };
+  party.hostUserId = hostUserId;
+  await persist(party);
+  return { ok: true, party };
+}
+
+export function isPartyExpired(party: Party | PublicParty): boolean {
+  if ("hostUserId" in party && party.hostUserId) return false;
+  if ("expiresAt" in party && !party.expiresAt) return false;
+  const expiresAt =
+    "expiresAt" in party && party.expiresAt
+      ? party.expiresAt
+      : party.createdAt + ANONYMOUS_PARTY_TTL_MS;
+  return Date.now() > expiresAt;
 }
 
 export async function getParty(code: string): Promise<Party | null> {
@@ -273,6 +305,12 @@ export async function addSong(
   if (!party) return { ok: false, error: "Party not found" };
   if (party.endedAt) {
     return { ok: false, error: "This party has ended" };
+  }
+  if (isPartyExpired(party)) {
+    return {
+      ok: false,
+      error: "This party has reached the 1-hour limit. The host needs to sign in to continue.",
+    };
   }
 
   if (party.banned.some((b) => b.videoId === input.videoId)) {
@@ -647,4 +685,45 @@ export async function verifyAdmin(
   const party = await storage().get(code.toUpperCase());
   if (!party) return false;
   return timingSafeEqual(party.adminKey, key);
+}
+
+// ---------- party index (for admin portal) ----------
+
+async function addPartyToIndex(code: string): Promise<void> {
+  const r = getRedis();
+  if (r) {
+    await r.sadd("all_party_codes", code.toUpperCase());
+    return;
+  }
+  const g = globalThis as unknown as { __jukeboxPartyIndex?: Set<string> };
+  if (!g.__jukeboxPartyIndex) g.__jukeboxPartyIndex = new Set();
+  g.__jukeboxPartyIndex.add(code.toUpperCase());
+}
+
+export async function listAllPartyCodes(): Promise<string[]> {
+  const r = getRedis();
+  if (r) {
+    const codes = await r.smembers("all_party_codes");
+    return codes as string[];
+  }
+  const g = globalThis as unknown as {
+    __jukeboxMem?: Map<string, Party>;
+    __jukeboxPartyIndex?: Set<string>;
+  };
+  const fromMap = g.__jukeboxMem ? Array.from(g.__jukeboxMem.keys()) : [];
+  const fromIndex = g.__jukeboxPartyIndex
+    ? Array.from(g.__jukeboxPartyIndex)
+    : [];
+  return Array.from(new Set([...fromMap, ...fromIndex]));
+}
+
+export async function getAllParties(): Promise<Party[]> {
+  const codes = await listAllPartyCodes();
+  const s = storage();
+  const parties: Party[] = [];
+  for (const code of codes) {
+    const p = await s.get(code);
+    if (p) parties.push(p);
+  }
+  return parties;
 }

@@ -156,7 +156,57 @@ export async function upsertUserFromGoogle(claims: {
     lastLoginAt: now,
   };
   await storage().setUser(user);
+  await addUserToIndex(user.id);
   return user;
+}
+
+// ---------- user index (for admin portal) ----------
+
+async function addUserToIndex(id: string): Promise<void> {
+  const r = getRedis();
+  if (r) {
+    await r.sadd("all_user_ids", id);
+    return;
+  }
+  const g = globalThis as unknown as { __jukeboxUserIndex?: Set<string> };
+  if (!g.__jukeboxUserIndex) g.__jukeboxUserIndex = new Set();
+  g.__jukeboxUserIndex.add(id);
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  const r = getRedis();
+  let ids: string[];
+  if (r) {
+    ids = (await r.smembers("all_user_ids")) as string[];
+  } else {
+    const g = globalThis as unknown as {
+      __jukeboxUsers?: Map<string, User>;
+      __jukeboxUserIndex?: Set<string>;
+    };
+    const fromMap = g.__jukeboxUsers ? Array.from(g.__jukeboxUsers.keys()) : [];
+    const fromIndex = g.__jukeboxUserIndex
+      ? Array.from(g.__jukeboxUserIndex)
+      : [];
+    ids = Array.from(new Set([...fromMap, ...fromIndex]));
+  }
+  const users: User[] = [];
+  for (const id of ids) {
+    const u = await storage().getUser(id);
+    if (u) users.push(u);
+  }
+  return users;
+}
+
+export async function countAllUsers(): Promise<number> {
+  const r = getRedis();
+  if (r) {
+    const n = await r.scard("all_user_ids");
+    return typeof n === "number" ? n : 0;
+  }
+  const g = globalThis as unknown as {
+    __jukeboxUsers?: Map<string, User>;
+  };
+  return g.__jukeboxUsers?.size ?? 0;
 }
 
 // ---------- saved playlists ----------

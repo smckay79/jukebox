@@ -307,17 +307,43 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
   const isAdmin = !!adminKey;
 
-  // bannedIds must be above the endedAt early-return — hooks can't be
-  // called after a conditional return without violating the Rules of
-  // Hooks (which causes "Rendered fewer hooks than expected" crash).
   const bannedIds = useMemo(
     () => new Set(party.banned.map((b) => b.videoId)),
     [party.banned],
   );
 
-  // Party is over → swap the entire room for the recap view. Everything
-  // below this point assumes an active party; the ended view is its own
-  // self-contained layout.
+  const partyExpired = useMemo(() => {
+    if (!party.expiresAt) return false;
+    return Date.now() > party.expiresAt;
+  }, [party.expiresAt]);
+
+  const expiresIn = useMemo(() => {
+    if (!party.expiresAt) return null;
+    const diff = party.expiresAt - Date.now();
+    if (diff <= 0) return 0;
+    return Math.ceil(diff / 60000);
+  }, [party.expiresAt]);
+
+  const [claiming, setClaiming] = useState(false);
+  async function claimParty() {
+    if (!adminKey) return;
+    setClaiming(true);
+    try {
+      const res = await fetch(`/api/party/${party.code}/claim`, {
+        method: "POST",
+        headers: { "x-admin-key": adminKey },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setParty(data.party as PublicParty);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   if (party.endedAt) {
     return (
       <>
@@ -428,6 +454,40 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           />
         </div>
       </header>
+
+      {/* Party expiry banner — shows for anonymous host parties */}
+      {isAdmin && party.expiresAt && partyExpired && (
+        <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-600/20 p-4">
+          <p className="text-sm font-semibold text-yellow-200">
+            Your party has reached the 1-hour limit
+          </p>
+          <p className="mt-1 text-xs text-yellow-200/70">
+            Guests can no longer add songs. Sign in with Google to remove the
+            limit and keep the party going.
+          </p>
+          {authUser ? (
+            <button
+              onClick={claimParty}
+              disabled={claiming}
+              className="mt-2 rounded-md bg-brand-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-50"
+            >
+              {claiming ? "Extending..." : "Extend party (signed in)"}
+            </button>
+          ) : (
+            <p className="mt-2 text-xs text-yellow-200/50">
+              Use the sign-in button in the top-right corner, then come back here.
+            </p>
+          )}
+        </div>
+      )}
+      {isAdmin && party.expiresAt && !partyExpired && expiresIn !== null && expiresIn <= 10 && (
+        <div className="mb-4 rounded-lg border border-yellow-500/20 bg-yellow-600/10 p-3">
+          <p className="text-xs text-yellow-200/70">
+            Party expires in ~{expiresIn} minute{expiresIn !== 1 ? "s" : ""}.
+            Sign in to remove the time limit.
+          </p>
+        </div>
+      )}
 
       {/* Mobile: compact now-playing up top, then search, then queue. The
           real video player is opt-in via the header toggle — when on, we
