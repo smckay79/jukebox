@@ -29,22 +29,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jukebox.player.data.RecentParty
 
 private const val CODE_LENGTH = 6
+private const val PIN_LENGTH = 4
 
 @Composable
 fun CodeEntryScreen(
-    onSubmit: (String) -> Unit,
+    onSubmit: (code: String, pin: String?) -> Unit,
     recentParties: List<RecentParty> = emptyList(),
 ) {
     var input by remember { mutableStateOf("") }
+    var pin by remember { mutableStateOf("") }
     val valid = input.length == CODE_LENGTH
 
     fun submit() {
-        if (valid) onSubmit(input)
+        if (valid) onSubmit(input, pin.ifBlank { null })
     }
 
     LazyColumn(
@@ -78,6 +81,22 @@ fun CodeEntryScreen(
                 textStyle = MaterialTheme.typography.displayMedium.copy(fontSize = 32.sp),
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Characters,
+                    imeAction = ImeAction.Next,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = pin,
+                onValueChange = { raw ->
+                    pin = raw.filter { it in '0'..'9' }.take(PIN_LENGTH)
+                },
+                label = { Text("Admin PIN (optional)") },
+                supportingText = { Text("Enter the host PIN to enable skip controls") },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.headlineMedium,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
                     imeAction = ImeAction.Go,
                 ),
                 keyboardActions = KeyboardActions(onGo = { submit() }),
@@ -109,7 +128,7 @@ fun CodeEntryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clickable { onSubmit(party.code) },
+                        .clickable { onSubmit(party.code, null) },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

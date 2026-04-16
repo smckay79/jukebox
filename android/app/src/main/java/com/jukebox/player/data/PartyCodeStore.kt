@@ -39,8 +39,19 @@ class PartyCodeStore(private val context: Context) {
         }
     }
 
+    val adminKeyFlow: Flow<String?> = context.codeDataStore.data.map { prefs ->
+        prefs[ADMIN_KEY]
+    }
+
+    suspend fun setAdminKey(key: String) {
+        context.codeDataStore.edit { prefs -> prefs[ADMIN_KEY] = key }
+    }
+
     suspend fun clear() {
-        context.codeDataStore.edit { prefs -> prefs.remove(CODE_KEY) }
+        context.codeDataStore.edit { prefs ->
+            prefs.remove(CODE_KEY)
+            prefs.remove(ADMIN_KEY)
+        }
     }
 
     suspend fun addToHistory(code: String, name: String) {
@@ -58,6 +69,7 @@ class PartyCodeStore(private val context: Context) {
 
     private companion object {
         val CODE_KEY = stringPreferencesKey("code")
+        val ADMIN_KEY = stringPreferencesKey("admin_key")
         val HISTORY_KEY = stringPreferencesKey("history")
 
         fun parseHistory(json: String?): List<RecentParty> {

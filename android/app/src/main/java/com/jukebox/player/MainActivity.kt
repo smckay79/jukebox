@@ -44,15 +44,20 @@ class MainActivity : ComponentActivity() {
             JukeboxPlayerTheme {
                 val scope = rememberCoroutineScope()
                 val savedCode by store.codeFlow.collectAsState(initial = null)
+                val savedAdminKey by store.adminKeyFlow.collectAsState(initial = null)
                 val history by store.historyFlow.collectAsState(initial = emptyList())
 
                 when (val code = savedCode) {
                     null, "" -> CodeEntryScreen(
-                        onSubmit = { entered ->
+                        onSubmit = { entered, pin ->
                             scope.launch {
                                 store.setCode(entered)
                                 val name = fetchPartyName(baseUrl, entered)
                                 store.addToHistory(entered, name)
+                                if (pin != null) {
+                                    val key = verifyPin(baseUrl, entered, pin)
+                                    if (key != null) store.setAdminKey(key)
+                                }
                             }
                         },
                         recentParties = history,
@@ -60,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     else -> PlayerScreen(
                         code = code,
                         baseUrl = baseUrl,
+                        adminKey = savedAdminKey,
                         onExit = {
                             lifecycleScope.launch { store.clear() }
                         },
@@ -69,6 +75,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private suspend fun verifyPin(baseUrl: String, code: String, pin: String): String? =
+    withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/api/party/${code.trim().uppercase()}/verify-pin")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 5_000
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.bufferedWriter().use {
+                it.write("""{"pin":"$pin"}""")
+            }
+            try {
+                if (conn.responseCode == 200) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    JSONObject(body).optString("adminKey", null)
+                } else null
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
 private suspend fun fetchPartyName(baseUrl: String, code: String): String =
     withContext(Dispatchers.IO) {

@@ -10,45 +10,47 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
-// Hosts a full-bleed WebView pointed at /party/<code>/display. The
-// display route on the web app is deliberately chrome-free, so we
-// don't need to inject any CSS or JS — we just load it and get out of
-// the way. The YouTube IFrame player inside that page handles all
-// playback; we flip a few WebView flags so autoplay, fullscreen, and
-// media access work without a user gesture (fine on a TV app).
 @Composable
 fun PlayerScreen(
     code: String,
     baseUrl: String,
+    adminKey: String? = null,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
     val url = "$baseUrl/party/$code/display"
+    val scope = rememberCoroutineScope()
 
-    // Long-press BACK returns to the code-entry screen. A short tap
-    // still lets the WebView navigate back through any in-page history
-    // (rare on /display, but harmless).
     BackHandler { onExit() }
 
-    // Build the WebView once, retain it across recompositions. The
-    // AndroidView factory runs only when the composable first enters
-    // the tree — subsequent recompositions just pass the same instance.
     val webView = remember {
         createWebView(context, url)
     }
 
-    // Pause playback when the screen leaves composition (e.g. user
-    // switches apps) to honor Android battery/autoplay policies, and
-    // destroy the WebView cleanly to avoid leaks.
     DisposableEffect(Unit) {
         webView.onResume()
         onDispose {
@@ -65,6 +67,45 @@ fun PlayerScreen(
             factory = { webView },
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (adminKey != null) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        skipSong(baseUrl, code, adminKey)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 24.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.15f),
+                    contentColor = Color.White,
+                ),
+            ) {
+                Text("Skip", fontSize = 14.sp)
+            }
+        }
+    }
+}
+
+private suspend fun skipSong(baseUrl: String, code: String, adminKey: String) {
+    withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/api/party/${code.trim().uppercase()}/admin")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 5_000
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("x-admin-key", adminKey)
+            conn.doOutput = true
+            conn.outputStream.bufferedWriter().use {
+                it.write("""{"action":"skip"}""")
+            }
+            try { conn.responseCode } finally { conn.disconnect() }
+        } catch (_: Exception) { }
     }
 }
 
