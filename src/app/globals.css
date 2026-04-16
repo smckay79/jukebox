@@ -28,6 +28,14 @@ body {
   min-height: 100vh;
 }
 
+/* YouTube IFrame API sets inline pixel width/height on the iframe.
+   Override so the player reflows when its container resizes (e.g. when
+   the QR sidebar toggles on desktop). */
+iframe[src*="youtube"] {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 @layer components {
   .card {
     @apply rounded-2xl border border-white/10 bg-white/5 backdrop-blur shadow-xl;
