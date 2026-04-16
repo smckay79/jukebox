@@ -1,6 +1,7 @@
 import Link from "next/link";
 import JoinForm from "@/components/JoinForm";
 import CreatePartyForm from "@/components/CreatePartyForm";
+import UserMenu from "@/components/UserMenu";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -17,14 +18,17 @@ export default async function Home() {
           </span>
           Jukebox
         </Link>
-        {showAdmin && (
-          <Link
-            href="/admin"
-            className="text-sm text-white/40 hover:text-white/70"
-          >
-            Admin
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {showAdmin && (
+            <Link
+              href="/admin"
+              className="text-sm text-white/40 hover:text-white/70"
+            >
+              Admin
+            </Link>
+          )}
+          <UserMenu nextPath="/" />
+        </div>
       </header>
 
       <section className="mb-12">
@@ -46,7 +50,7 @@ export default async function Home() {
           <h2 className="mb-2 text-xl font-semibold">Start a party</h2>
           <p className="mb-4 text-sm text-white/60">
             You&apos;ll get a private code to share and admin controls to skip
-            or remove tracks.
+            or remove tracks. Sign in for unlimited party length.
           </p>
           <CreatePartyForm />
         </div>
