@@ -68,7 +68,7 @@ export default function Player({
   // song-info footer and lets the video fill the parent.
   fill?: boolean;
 }) {
-  const mountRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const currentVideoRef = useRef<string | null>(null);
   const onEndedRef = useRef(onEnded);
@@ -76,34 +76,38 @@ export default function Player({
 
   useEffect(() => {
     let cancelled = false;
+
     if (!song) {
-      playerRef.current?.destroy();
-      playerRef.current = null;
       currentVideoRef.current = null;
+      if (playerRef.current) {
+        try { playerRef.current.destroy(); } catch { /* detached iframe */ }
+        playerRef.current = null;
+      }
       return;
     }
 
     loadYouTubeApi().then(() => {
       if (cancelled) return;
-      if (!playerRef.current && mountRef.current && window.YT) {
-        playerRef.current = new window.YT.Player(mountRef.current, {
+      if (!playerRef.current && wrapRef.current && window.YT) {
+        // YouTube's Player() replaces the target element with an iframe,
+        // so we create a fresh div each time instead of reusing the ref.
+        wrapRef.current.textContent = "";
+        const mount = document.createElement("div");
+        wrapRef.current.appendChild(mount);
+
+        playerRef.current = new window.YT.Player(mount, {
           videoId: song.videoId,
           width: "100%",
           height: "100%",
           playerVars: {
             autoplay: 1,
             playsinline: 1,
-            // Hide in-video cards / annotations and limit the "related"
-            // rail shown when YouTube thinks it needs to. `rel=0` now only
-            // constrains related videos to the same channel — end screens
-            // are additionally sidestepped by our onStateChange handler
-            // advancing to the next queued song immediately on state 0.
             rel: 0,
             modestbranding: 1,
-            iv_load_policy: 3, // disable annotations
-            cc_load_policy: 0, // don't force captions
-            disablekb: 1, // no stray keyboard shortcuts
-            fs: 0, // hide fullscreen button (TV is already full)
+            iv_load_policy: 3,
+            cc_load_policy: 0,
+            disablekb: 1,
+            fs: 0,
           },
           events: {
             onStateChange: (e) => {
@@ -141,11 +145,12 @@ export default function Player({
             : "relative aspect-video w-full overflow-hidden bg-black"
         }
       >
-        {song ? (
-          <div className="yt-wrap absolute inset-0">
-            <div ref={mountRef} />
-          </div>
-        ) : (
+        <div
+          ref={wrapRef}
+          className="yt-wrap absolute inset-0"
+          style={song ? undefined : { display: "none" }}
+        />
+        {!song && (
           <div className="flex h-full w-full items-center justify-center text-white/40">
             Nothing playing — add a song to get started.
           </div>
