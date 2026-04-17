@@ -134,6 +134,9 @@ export interface PublicParty {
   // When set, the party has been ended by the host — the client switches
   // to a recap view.
   endedAt?: number;
+  // The host's subscription tier. Drives feature gating on the client
+  // (bumpers, import, voting, marquee, etc.). Absent = unknown (treat as free).
+  hostTier?: SubscriptionTier;
   // Party time limit info for free-tier hosts. Absent = unlimited.
   timeLimit?: {
     limitMs: number;

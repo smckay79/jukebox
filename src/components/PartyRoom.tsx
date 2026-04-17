@@ -25,7 +25,6 @@ import type {
   PublicParty,
   PublicUser,
   Song,
-  SubscriptionTier,
 } from "@/lib/types";
 
 export default function PartyRoom({ initial }: { initial: PublicParty }) {
@@ -128,7 +127,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
       es.onmessage = (ev) => {
         try {
           const next = JSON.parse(ev.data) as PublicParty;
-          setParty(next);
+          // Pub/sub pushes don't include hostTier — preserve it from
+          // the initial load or last full fetch.
+          setParty((prev) => ({
+            ...next,
+            hostTier: next.hostTier ?? prev.hostTier,
+            timeLimit: next.timeLimit ?? prev.timeLimit,
+          }));
         } catch {
           /* ignore malformed frame */
         }
@@ -343,11 +348,8 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   }
 
   const isAdmin = !!adminKey;
-  const hostTier: SubscriptionTier =
-    isAdmin && authUser?.subscription
-      ? authUser.subscription.tier
-      : "free";
-  const isPro = hostTier === "pro" || hostTier === "trial";
+  const isPro =
+    party.hostTier === "pro" || party.hostTier === "trial";
 
   const bannedIds = useMemo(
     () => new Set(party.banned.map((b) => b.videoId)),

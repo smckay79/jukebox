@@ -177,6 +177,7 @@ export function toPublicParty(
     banned: p.banned ?? [],
     theme: p.theme,
     marquee: p.marquee,
+    hostTier,
     playlist: p.playlist
       ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
       : undefined,
