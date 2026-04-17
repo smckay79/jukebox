@@ -307,12 +307,37 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     await adminPost({ action: "clearPlaylist" });
   }
 
-  async function onAddBumper(url: string): Promise<string | null> {
-    return adminPost({ action: "addBumper", url });
+  async function onAddBumper(
+    url: string,
+    triggerType?: "random" | "match",
+    triggerMatch?: string,
+  ): Promise<string | null> {
+    return adminPost({ action: "addBumper", url, triggerType, triggerMatch });
   }
 
   async function onRemoveBumper(videoId: string): Promise<string | null> {
     return adminPost({ action: "removeBumper", videoId });
+  }
+
+  async function onListBumpers(): Promise<
+    { videoId: string; title: string; thumbnail: string; triggerType?: string; triggerMatch?: string }[]
+  > {
+    if (!adminKey) return [];
+    try {
+      const res = await fetch(`/api/party/${party.code}/admin`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": adminKey,
+        },
+        body: JSON.stringify({ action: "listBumpers" }),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.bumpers ?? [];
+    } catch {
+      return [];
+    }
   }
 
   const isAdmin = !!adminKey;
@@ -418,6 +443,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onSetCountry={onSetCountry}
               onAddBumper={onAddBumper}
               onRemoveBumper={onRemoveBumper}
+              onListBumpers={onListBumpers}
             />
           ) : null}
           {isAdmin && adminKey ? (

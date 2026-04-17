@@ -4,12 +4,6 @@ import { useEffect, useState } from "react";
 import ThemePicker from "./ThemePicker";
 import type { PartyTheme } from "@/lib/types";
 
-// Admin-only settings modal, triggered from the header next to Show QR.
-// Collects "one-time" party configuration — the background wallpaper and
-// the scrolling marquee — in a single place so the header stays tidy.
-// Short curated list of common picks. YouTube accepts any ISO 3166-1 alpha-2,
-// but exposing a dropdown keeps the UI tidy and avoids typos. "" = Auto
-// (fall back to the request-derived region in resolveRegion).
 const COUNTRY_OPTIONS: Array<{ code: string; label: string }> = [
   { code: "", label: "Auto (from location)" },
   { code: "US", label: "United States" },
@@ -40,6 +34,8 @@ interface BumperEntry {
   videoId: string;
   title: string;
   thumbnail: string;
+  triggerType?: string;
+  triggerMatch?: string;
 }
 
 export default function SettingsMenu({
@@ -52,6 +48,7 @@ export default function SettingsMenu({
   onSetCountry,
   onAddBumper,
   onRemoveBumper,
+  onListBumpers,
 }: {
   theme?: PartyTheme;
   marquee?: string;
@@ -60,8 +57,9 @@ export default function SettingsMenu({
   onSetTheme: (next: PartyTheme | null) => Promise<string | null>;
   onSetMarquee: (text: string) => Promise<string | null>;
   onSetCountry: (next: string | null) => Promise<string | null>;
-  onAddBumper: (url: string) => Promise<string | null>;
+  onAddBumper: (url: string, triggerType?: "random" | "match", triggerMatch?: string) => Promise<string | null>;
   onRemoveBumper: (videoId: string) => Promise<string | null>;
+  onListBumpers: () => Promise<BumperEntry[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(marquee ?? "");
@@ -71,18 +69,24 @@ export default function SettingsMenu({
   const [countryBusy, setCountryBusy] = useState(false);
   const [countryFlash, setCountryFlash] = useState(false);
   const [countryErr, setCountryErr] = useState<string | null>(null);
+
+  // Bumper add form state
   const [bumperUrl, setBumperUrl] = useState("");
+  const [bumperTrigger, setBumperTrigger] = useState<"random" | "match">("random");
+  const [bumperMatch, setBumperMatch] = useState("");
   const [bumperBusy, setBumperBusy] = useState(false);
   const [bumperErr, setBumperErr] = useState<string | null>(null);
   const [bumperFlash, setBumperFlash] = useState(false);
 
-  // Re-sync the textarea whenever the persisted marquee changes from the
-  // server (another admin device, or a load).
+  // Bumper list state
+  const [bumpers, setBumpers] = useState<BumperEntry[]>([]);
+  const [bumpersLoaded, setBumpersLoaded] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
   useEffect(() => {
     setDraft(marquee ?? "");
   }, [marquee]);
 
-  // Close on Escape for keyboard users.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -91,6 +95,22 @@ export default function SettingsMenu({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // Load bumper list when modal opens
+  useEffect(() => {
+    if (!open) {
+      setBumpersLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    onListBumpers().then((list) => {
+      if (!cancelled) {
+        setBumpers(list);
+        setBumpersLoaded(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [open, onListBumpers]);
 
   async function saveCountry(next: string) {
     setCountryBusy(true);
@@ -116,6 +136,39 @@ export default function SettingsMenu({
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1200);
     }
+  }
+
+  async function addBumper() {
+    setBumperBusy(true);
+    setBumperErr(null);
+    const triggerType = bumperTrigger;
+    const triggerMatch = bumperTrigger === "match" ? bumperMatch.trim() : undefined;
+    if (bumperTrigger === "match" && !triggerMatch) {
+      setBumperErr("Enter a keyword to match against song titles");
+      setBumperBusy(false);
+      return;
+    }
+    const e = await onAddBumper(bumperUrl.trim(), triggerType, triggerMatch);
+    setBumperBusy(false);
+    if (e) {
+      setBumperErr(e);
+    } else {
+      setBumperUrl("");
+      setBumperMatch("");
+      setBumperTrigger("random");
+      setBumperFlash(true);
+      setTimeout(() => setBumperFlash(false), 1200);
+      // Refresh the list
+      const list = await onListBumpers();
+      setBumpers(list);
+    }
+  }
+
+  async function removeBumper(videoId: string) {
+    setRemovingId(videoId);
+    await onRemoveBumper(videoId);
+    setBumpers((prev) => prev.filter((b) => b.videoId !== videoId));
+    setRemovingId(null);
   }
 
   return (
@@ -232,7 +285,7 @@ export default function SettingsMenu({
               {err ? <p className="text-xs text-red-400">{err}</p> : null}
             </section>
 
-            <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
+            <section className="mt-5 space-y-3 border-t border-white/10 pt-4">
               <h3 className="text-sm font-semibold text-white/80">
                 Bumper videos
                 {(bumperCount ?? 0) > 0 ? (
@@ -242,43 +295,111 @@ export default function SettingsMenu({
                 ) : null}
               </h3>
               <p className="text-xs text-white/50">
-                Short clips that play randomly between songs — intros,
-                hype reels, funny clips, whatever. Paste a YouTube link
-                to add one.
+                Short clips that play between songs — intros, hype reels,
+                funny clips. Add a YouTube link and choose when it plays.
               </p>
-              <div className="flex gap-2">
+
+              {/* Add bumper form */}
+              <div className="space-y-2 rounded-lg bg-white/5 p-3">
                 <input
                   value={bumperUrl}
                   onChange={(e) => setBumperUrl(e.target.value)}
                   placeholder="Paste a YouTube link"
-                  className="input flex-1 text-sm"
+                  className="input w-full text-sm"
                 />
-                <button
-                  type="button"
-                  className="btn-primary !px-3 !py-1.5 text-sm"
-                  disabled={bumperBusy || !bumperUrl.trim()}
-                  onClick={async () => {
-                    setBumperBusy(true);
-                    setBumperErr(null);
-                    const e = await onAddBumper(bumperUrl.trim());
-                    setBumperBusy(false);
-                    if (e) {
-                      setBumperErr(e);
-                    } else {
-                      setBumperUrl("");
-                      setBumperFlash(true);
-                      setTimeout(() => setBumperFlash(false), 1200);
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-white/50">Plays:</span>
+                  <button
+                    type="button"
+                    className={
+                      "rounded-full px-3 py-1 text-xs font-medium transition " +
+                      (bumperTrigger === "random"
+                        ? "bg-brand-600 text-white"
+                        : "bg-white/10 text-white/60 hover:bg-white/20")
                     }
-                  }}
-                >
-                  {bumperBusy ? "Adding…" : "Add"}
-                </button>
+                    onClick={() => setBumperTrigger("random")}
+                  >
+                    Randomly
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      "rounded-full px-3 py-1 text-xs font-medium transition " +
+                      (bumperTrigger === "match"
+                        ? "bg-brand-600 text-white"
+                        : "bg-white/10 text-white/60 hover:bg-white/20")
+                    }
+                    onClick={() => setBumperTrigger("match")}
+                  >
+                    Before matching songs
+                  </button>
+                </div>
+                {bumperTrigger === "match" ? (
+                  <input
+                    value={bumperMatch}
+                    onChange={(e) => setBumperMatch(e.target.value)}
+                    placeholder='e.g. "Drake" or "Taylor Swift"'
+                    className="input w-full text-sm"
+                  />
+                ) : null}
+                <div className="flex items-center justify-between">
+                  <div>
+                    {bumperFlash ? (
+                      <span className="text-xs text-emerald-300">Added!</span>
+                    ) : null}
+                    {bumperErr ? (
+                      <span className="text-xs text-red-400">{bumperErr}</span>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary !px-3 !py-1.5 text-sm"
+                    disabled={bumperBusy || !bumperUrl.trim()}
+                    onClick={addBumper}
+                  >
+                    {bumperBusy ? "Adding…" : "Add bumper"}
+                  </button>
+                </div>
               </div>
-              {bumperFlash ? (
-                <span className="text-xs text-emerald-300">Added!</span>
-              ) : null}
-              {bumperErr ? (
-                <p className="text-xs text-red-400">{bumperErr}</p>
+
+              {/* Bumper list */}
+              {bumpersLoaded && bumpers.length > 0 ? (
+                <div className="space-y-1">
+                  {bumpers.map((b) => (
+                    <div
+                      key={b.videoId}
+                      className="flex items-center gap-2 rounded-lg bg-white/5 p-2"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={b.thumbnail}
+                        alt=""
+                        className="h-9 w-16 flex-shrink-0 rounded object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-white/90">
+                          {b.title}
+                        </p>
+                        <p className="text-[10px] text-white/40">
+                          {b.triggerType === "match" && b.triggerMatch
+                            ? `Before "${b.triggerMatch}"`
+                            : "Random (~30%)"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="flex-shrink-0 rounded px-2 py-1 text-xs text-white/40 hover:bg-white/10 hover:text-red-400"
+                        disabled={removingId === b.videoId}
+                        onClick={() => removeBumper(b.videoId)}
+                        title="Remove bumper"
+                      >
+                        {removingId === b.videoId ? "…" : "✕"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : bumpersLoaded && bumpers.length === 0 ? (
+                <p className="text-xs text-white/30">No bumpers yet.</p>
               ) : null}
             </section>
           </div>

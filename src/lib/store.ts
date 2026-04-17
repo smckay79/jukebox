@@ -3,6 +3,7 @@ import { getRedis } from "./kv";
 import { publishPartyUpdate } from "./pubsub";
 import type {
   BannedVideo,
+  BumperVideo,
   Party,
   PartyTheme,
   PlaylistTrack,
@@ -175,31 +176,52 @@ export function toPublicParty(p: Party): PublicParty {
 // by earliest addedAt). When the user queue is empty and a playlist is
 // set, loop through its items — cursor advances as each playlist track
 // leaves nowPlaying (see advanceOnLeaving below).
+function makeBumperSong(pick: BumperVideo, now: number): Song {
+  return {
+    id: makeId(),
+    videoId: pick.videoId,
+    title: pick.title,
+    thumbnail: pick.thumbnail,
+    addedBy: "Bumper",
+    addedByUserId: "__bumper",
+    addedAt: now,
+    votes: [],
+    source: "bumper",
+    startedAt: now,
+  };
+}
+
 function promoteNext(party: Party, prevSource?: string) {
   if (party.nowPlaying) return;
   const now = Date.now();
-
-  // Random bumper between songs — ~30% chance, never back-to-back.
   const bumpers = party.bumpers ?? [];
-  if (
-    bumpers.length > 0 &&
-    prevSource !== "bumper" &&
-    Math.random() < 0.3
-  ) {
-    const pick = bumpers[Math.floor(Math.random() * bumpers.length)];
-    party.nowPlaying = {
-      id: makeId(),
-      videoId: pick.videoId,
-      title: pick.title,
-      thumbnail: pick.thumbnail,
-      addedBy: "Bumper",
-      addedByUserId: "__bumper",
-      addedAt: now,
-      votes: [],
-      source: "bumper",
-      startedAt: now,
-    };
-    return;
+
+  if (prevSource !== "bumper" && bumpers.length > 0) {
+    // Peek at what the next song would be to check match-triggered bumpers.
+    const sorted = sortQueue(party.queue);
+    const upcoming = sorted[0];
+    if (upcoming) {
+      const titleLower = upcoming.title.toLowerCase();
+      const matched = bumpers.filter(
+        (b) =>
+          b.triggerType === "match" &&
+          b.triggerMatch &&
+          titleLower.includes(b.triggerMatch.toLowerCase()),
+      );
+      if (matched.length > 0) {
+        const pick = matched[Math.floor(Math.random() * matched.length)];
+        party.nowPlaying = makeBumperSong(pick, now);
+        return;
+      }
+    }
+
+    // Random bumpers — ~30% chance between any songs.
+    const randoms = bumpers.filter((b) => !b.triggerType || b.triggerType === "random");
+    if (randoms.length > 0 && Math.random() < 0.3) {
+      const pick = randoms[Math.floor(Math.random() * randoms.length)];
+      party.nowPlaying = makeBumperSong(pick, now);
+      return;
+    }
   }
 
   const sorted = sortQueue(party.queue);
@@ -602,7 +624,13 @@ export async function clearPartyPlaylist(
 
 export async function addBumper(
   code: string,
-  input: { videoId: string; title: string; thumbnail: string },
+  input: {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+    triggerType?: "random" | "match";
+    triggerMatch?: string;
+  },
 ): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
   const s = storage();
   const party = await s.get(code.toUpperCase());
@@ -611,12 +639,18 @@ export async function addBumper(
   if (party.bumpers.some((b) => b.videoId === input.videoId)) {
     return { ok: true, party };
   }
+  const triggerType = input.triggerType === "match" ? "match" : "random";
   party.bumpers.push({
     videoId: input.videoId,
     title: input.title.slice(0, 200) || "Bumper",
     thumbnail:
       input.thumbnail ||
       `https://i.ytimg.com/vi/${input.videoId}/hqdefault.jpg`,
+    triggerType,
+    triggerMatch:
+      triggerType === "match"
+        ? (input.triggerMatch ?? "").slice(0, 100) || undefined
+        : undefined,
   });
   await persist(party);
   return { ok: true, party };
@@ -632,6 +666,13 @@ export async function removeBumper(
   party.bumpers = (party.bumpers ?? []).filter((b) => b.videoId !== videoId);
   await persist(party);
   return { ok: true, party };
+}
+
+export async function getBumpers(
+  code: string,
+): Promise<BumperVideo[]> {
+  const party = await storage().get(code.toUpperCase());
+  return party?.bumpers ?? [];
 }
 
 // Pass `null` (or an empty string) to clear and fall back to auto-detection.

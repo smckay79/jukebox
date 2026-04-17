@@ -3,6 +3,7 @@ import {
   addBumper,
   banVideo,
   clearPartyPlaylist,
+  getBumpers,
   removeBumper,
   removeSong,
   setCountry,
@@ -47,6 +48,8 @@ export async function POST(
     marquee?: string;
     ip?: string;
     country?: string | null;
+    triggerType?: string;
+    triggerMatch?: string;
   } = {};
   try {
     body = await req.json();
@@ -196,11 +199,18 @@ export async function POST(
         thumbnail = thumbnail || meta.thumbnail;
       }
     }
-    const res = await addBumper(params.code, { videoId, title, thumbnail });
+    const triggerType = body.triggerType === "match" ? "match" as const : "random" as const;
+    const triggerMatch = (body.triggerMatch ?? "").toString().trim();
+    const res = await addBumper(params.code, { videoId, title, thumbnail, triggerType, triggerMatch });
     if (!res.ok) {
       return NextResponse.json({ error: res.error }, { status: 404 });
     }
     return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "listBumpers") {
+    const bumpers = await getBumpers(params.code);
+    return NextResponse.json({ bumpers });
   }
 
   if (body.action === "removeBumper") {

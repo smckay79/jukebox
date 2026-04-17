@@ -51,6 +51,13 @@ export interface BumperVideo {
   videoId: string;
   title: string;
   thumbnail: string;
+  // "random" (default) plays with ~30% chance between any songs.
+  // "match" plays before a song whose title contains `triggerMatch`.
+  triggerType?: "random" | "match";
+  // Case-insensitive substring matched against song titles. Only used
+  // when triggerType is "match" — e.g. "Drake" triggers before any
+  // song with "Drake" in the title.
+  triggerMatch?: string;
 }
 
 export interface PartyPlaylist {
