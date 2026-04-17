@@ -173,7 +173,12 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
       </div>
 
       <div className="relative min-h-0 flex-1 bg-black">
-        <Player song={party.nowPlaying} onEnded={onEnded} fill />
+        <Player
+          song={party.nowPlaying}
+          onEnded={onEnded}
+          fill
+          downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+        />
         {/* Bottom gradient covers YouTube's end-screen cards/links so
             they're neither visible nor clickable on the TV display. */}
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
