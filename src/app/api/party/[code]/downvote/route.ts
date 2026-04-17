@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { downvoteNowPlaying, toPublicParty } from "@/lib/store";
+import { downvoteNowPlaying, toPublicParty, verifyAdmin } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export async function POST(
   req: Request,
   { params }: { params: { code: string } },
 ) {
-  let body: { userId?: string } = {};
+  let body: { userId?: string; adminKey?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -21,13 +21,18 @@ export async function POST(
       { status: 400 },
     );
   }
-  const result = await downvoteNowPlaying(params.code, userId);
+
+  const adminKey = body.adminKey ?? req.headers.get("x-admin-key");
+  const isHost = adminKey ? await verifyAdmin(params.code, adminKey) : false;
+
+  const result = await downvoteNowPlaying(params.code, userId, isHost);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
   return NextResponse.json({
     downvotes: result.downvotes,
     skipped: result.skipped,
+    goldenSkip: result.goldenSkip,
     party: toPublicParty(result.party),
   });
 }

@@ -453,14 +453,25 @@ function recordDownvote(partyCode: string, userId: string) {
 export async function downvoteNowPlaying(
   code: string,
   userId: string,
+  isHost = false,
 ): Promise<
-  | { ok: true; downvotes: number; skipped: boolean; party: Party }
+  | { ok: true; downvotes: number; skipped: boolean; goldenSkip: boolean; party: Party }
   | { ok: false; error: string }
 > {
   const s = storage();
   const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
   if (!party.nowPlaying) return { ok: false, error: "Nothing playing" };
+
+  // Host golden downvote: mark the song and broadcast so all screens
+  // show the golden X. The actual skip happens when the client calls
+  // POST /ended after the animation completes.
+  if (isHost) {
+    party.nowPlaying.goldenSkip = true;
+    if (!party.nowPlaying.downvotes) party.nowPlaying.downvotes = [];
+    await persist(party);
+    return { ok: true, downvotes: party.nowPlaying.downvotes.length, skipped: false, goldenSkip: true, party };
+  }
 
   if (!canUserDownvote(code.toUpperCase(), userId)) {
     return { ok: false, error: "You've used your skips for now — try again later" };
@@ -521,6 +532,7 @@ export async function downvoteNowPlaying(
     ok: true,
     downvotes: skipped ? 0 : (party.nowPlaying?.downvotes?.length ?? 0),
     skipped,
+    goldenSkip: false,
     party,
   };
 }

@@ -316,6 +316,26 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     }
   }
 
+  async function onGoldenDownvote() {
+    if (!party.nowPlaying || downvoteBusy) return;
+    setDownvoteBusy(true);
+    try {
+      const res = await fetch(`/api/party/${party.code}/downvote`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, adminKey }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setParty(data.party as PublicParty);
+      }
+    } catch {
+      refresh();
+    } finally {
+      setDownvoteBusy(false);
+    }
+  }
+
   async function onSetTheme(theme: PartyTheme | null): Promise<string | null> {
     return adminPost({ action: "theme", theme });
   }
@@ -485,9 +505,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onEnded={onEnded}
               partyCode={party.code}
               downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+              goldenSkip={party.nowPlaying?.goldenSkip ?? false}
               onDownvote={isPro ? onDownvote : undefined}
+              onGoldenDownvote={isAdmin ? onGoldenDownvote : undefined}
               canDownvote={isPro && !!party.nowPlaying}
               hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
+              isHost={isAdmin}
             />
             {isAdmin && party.nowPlaying ? (
               <div className="flex justify-end gap-2">
@@ -663,9 +686,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                 partyCode={party.code}
                 fill={presenterMode}
                 downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+                goldenSkip={party.nowPlaying?.goldenSkip ?? false}
                 onDownvote={isPro ? onDownvote : undefined}
+                onGoldenDownvote={isAdmin ? onGoldenDownvote : undefined}
                 canDownvote={isPro && !!party.nowPlaying}
                 hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
+                isHost={isAdmin}
               />
             </div>
 

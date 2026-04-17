@@ -178,6 +178,7 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
           onEnded={onEnded}
           fill
           downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+          goldenSkip={party.nowPlaying?.goldenSkip ?? false}
         />
         {/* Bottom gradient covers YouTube's end-screen cards/links so
             they're neither visible nor clickable on the TV display. */}

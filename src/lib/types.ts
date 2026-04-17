@@ -20,6 +20,9 @@ export interface Song {
   // the history entry — nowPlaying doesn't carry this. Approximate (the
   // player end signal is "song ended", not "song played exactly N sec").
   playedSeconds?: number;
+  // Set when the host uses their golden downvote. All clients show a
+  // dramatic golden X overlay before the song is actually advanced.
+  goldenSkip?: boolean;
 }
 
 export interface BannedVideo {

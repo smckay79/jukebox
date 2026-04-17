@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MiniQR from "./MiniQR";
 import type { Song } from "@/lib/types";
 
@@ -64,18 +64,24 @@ export default function Player({
   partyCode,
   fill,
   downvotes = 0,
+  goldenSkip = false,
   onDownvote,
+  onGoldenDownvote,
   canDownvote = false,
   hasDownvoted = false,
+  isHost = false,
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
   partyCode?: string;
   fill?: boolean;
   downvotes?: number;
+  goldenSkip?: boolean;
   onDownvote?: () => void;
+  onGoldenDownvote?: () => void;
   canDownvote?: boolean;
   hasDownvoted?: boolean;
+  isHost?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -158,6 +164,21 @@ export default function Player({
     };
   }, [song]);
 
+  // Golden skip: after the animation plays (~2.2s), auto-advance the song.
+  const goldenFired = useRef(false);
+  const triggerSkip = useCallback(() => {
+    if (song && !goldenFired.current) {
+      goldenFired.current = true;
+      onEnded(song.videoId);
+    }
+  }, [song, onEnded]);
+
+  useEffect(() => {
+    if (!goldenSkip || !song) { goldenFired.current = false; return; }
+    const timer = setTimeout(triggerSkip, 2200);
+    return () => clearTimeout(timer);
+  }, [goldenSkip, song, triggerSkip]);
+
   return (
     <div
       className={
@@ -196,8 +217,31 @@ export default function Player({
             </span>
           </button>
         ) : null}
-        {/* Downvote X marks overlay */}
-        {song && downvotes > 0 ? (
+        {/* Golden skip overlay — dramatic full-screen golden X */}
+        {song && goldenSkip ? (
+          <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden">
+            <div className="absolute inset-0 bg-black/60" style={{ animation: "goldenFade 2.2s ease-out both" }} />
+            <div
+              className="relative flex items-center justify-center"
+              style={{ animation: "goldenXIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}
+            >
+              <div className="golden-x-glow absolute h-48 w-48 rounded-full md:h-72 md:w-72" style={{ animation: "goldenPulse 1s ease-in-out 0.3s infinite" }} />
+              <div
+                className="relative flex h-40 w-40 items-center justify-center rounded-2xl border-[6px] border-yellow-400 text-[8rem] font-black leading-none text-yellow-400 drop-shadow-[0_0_40px_rgba(250,204,21,0.8)] md:h-60 md:w-60 md:rounded-3xl md:border-8 md:text-[12rem]"
+                style={{ textShadow: "0 0 60px rgba(250,204,21,0.6), 0 0 120px rgba(250,204,21,0.3)" }}
+              >
+                X
+              </div>
+            </div>
+            <div className="absolute bottom-8 text-center" style={{ animation: "goldenTextIn 0.5s ease-out 0.4s both" }}>
+              <div className="text-lg font-bold tracking-widest text-yellow-400 drop-shadow-lg md:text-2xl">
+                HOST SKIP
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* Downvote X marks overlay (regular crowd votes) */}
+        {song && !goldenSkip && downvotes > 0 ? (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-4">
             {Array.from({ length: Math.min(downvotes, 3) }).map((_, i) => (
               <div
@@ -235,7 +279,17 @@ export default function Player({
               Added by {song.addedBy}
             </div>
           </div>
-          {onDownvote && canDownvote ? (
+          {isHost && onGoldenDownvote ? (
+            <button
+              type="button"
+              onClick={onGoldenDownvote}
+              className="flex items-center gap-1 rounded-lg bg-yellow-500/20 px-3 py-1.5 text-sm font-medium text-yellow-400 transition hover:bg-yellow-500/30"
+              title="Host skip — instantly skips this song"
+            >
+              <span className="text-base" style={{ filter: "drop-shadow(0 0 4px rgba(250,204,21,0.6))" }}>✕</span>
+              <span>Skip</span>
+            </button>
+          ) : onDownvote && canDownvote ? (
             <button
               type="button"
               onClick={onDownvote}
