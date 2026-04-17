@@ -34,9 +34,11 @@ async function resizeImage(file: File): Promise<string> {
 export default function ThemePicker({
   theme,
   onApply,
+  isPro = true,
 }: {
   theme?: PartyTheme;
   onApply: (next: PartyTheme | null) => Promise<string | null>;
+  isPro?: boolean;
 }) {
   const [era, setEra] = useState<string>(theme?.era ?? "80s");
   const [genre, setGenre] = useState<string>(theme?.genre ?? "electronic");
@@ -156,20 +158,39 @@ export default function ThemePicker({
       </div>
 
       <div className="border-t border-white/10 pt-3">
-        <div className="mb-1 text-xs text-white/60">
-          Or upload a party photo
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          onChange={onUpload}
-          disabled={busy}
-          className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-brand-500"
-        />
-        <p className="mt-1 text-xs text-white/40">
-          Resized to ~1600px and darkened so the UI stays readable.
-        </p>
+        {isPro ? (
+          <>
+            <div className="mb-1 text-xs text-white/60">
+              Or upload a party photo
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={onUpload}
+              disabled={busy}
+              className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-brand-500"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Resized to ~1600px and darkened so the UI stays readable.
+            </p>
+          </>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs text-white/40">
+              <span>Upload a party photo</span>
+              <span className="rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-semibold text-brand-300">
+                Pro
+              </span>
+            </div>
+            <a
+              href="/pricing"
+              className="text-[10px] text-brand-300 underline-offset-2 hover:underline"
+            >
+              Upgrade
+            </a>
+          </div>
+        )}
       </div>
 
       {err ? <p className="text-xs text-red-400">{err}</p> : null}

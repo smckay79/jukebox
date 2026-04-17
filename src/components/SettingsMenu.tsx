@@ -278,7 +278,7 @@ export default function SettingsMenu({
               <h3 className="text-sm font-semibold text-white/80">
                 Background
               </h3>
-              <ThemePicker theme={theme} onApply={onSetTheme} />
+              <ThemePicker theme={theme} onApply={onSetTheme} isPro={isPro} />
             </section>
 
             <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
