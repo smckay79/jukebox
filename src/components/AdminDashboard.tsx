@@ -61,7 +61,19 @@ interface AdminInvite {
   revokedAt?: number;
 }
 
-type Tab = "overview" | "parties" | "users" | "invites";
+interface AdminFlaggedVideo {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  firstFlaggedAt: number;
+  lastFlaggedAt: number;
+  skipCount: number;
+  parties: string[];
+  globallyBanned: boolean;
+  dismissedAt?: number;
+}
+
+type Tab = "overview" | "parties" | "users" | "invites" | "flagged";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -91,6 +103,7 @@ export default function AdminDashboard() {
   const [parties, setParties] = useState<AdminParty[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [invites, setInvites] = useState<AdminInvite[]>([]);
+  const [flagged, setFlagged] = useState<AdminFlaggedVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,6 +113,17 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Failed to load invites");
       const data = await res.json();
       setInvites(data.invites);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
+  const fetchFlagged = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/flagged");
+      if (!res.ok) throw new Error("Failed to load flagged videos");
+      const data = await res.json();
+      setFlagged(data.videos);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -140,10 +164,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites()]).finally(() =>
+    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchFlagged()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchStats, fetchParties, fetchUsers, fetchInvites]);
+  }, [fetchStats, fetchParties, fetchUsers, fetchInvites, fetchFlagged]);
 
   async function endParty(code: string) {
     if (!confirm(`End party ${code}?`)) return;
@@ -203,7 +227,7 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-white/5 p-1">
-        {(["overview", "parties", "users", "invites"] as Tab[]).map((t) => (
+        {(["overview", "parties", "users", "invites", "flagged"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -219,7 +243,9 @@ export default function AdminDashboard() {
                 ? `Parties (${parties.length})`
                 : t === "users"
                   ? `Users (${users.length})`
-                  : `Invites (${invites.length})`}
+                  : t === "invites"
+                    ? `Invites (${invites.length})`
+                    : `Flagged (${flagged.length})`}
           </button>
         ))}
       </div>
@@ -235,6 +261,9 @@ export default function AdminDashboard() {
       {tab === "users" && <UsersTab users={users} onUpdate={fetchUsers} />}
       {tab === "invites" && (
         <InvitesTab invites={invites} onUpdate={fetchInvites} />
+      )}
+      {tab === "flagged" && (
+        <FlaggedTab videos={flagged} onUpdate={fetchFlagged} />
       )}
     </main>
   );
@@ -776,6 +805,179 @@ function InvitesTab({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FlaggedTab({
+  videos,
+  onUpdate,
+}: {
+  videos: AdminFlaggedVideo[];
+  onUpdate: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function action(videoId: string, act: string) {
+    setBusyId(videoId);
+    try {
+      await fetch("/api/admin/flagged", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: act, videoId }),
+      });
+      onUpdate();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const banned = videos.filter((v) => v.globallyBanned);
+  const pending = videos.filter((v) => !v.globallyBanned && !v.dismissedAt);
+  const dismissed = videos.filter((v) => !v.globallyBanned && !!v.dismissedAt);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="mb-1 text-lg font-semibold">Flagged Videos</h2>
+        <p className="mb-4 text-xs text-white/50">
+          Songs crowd-skipped via downvote across all parties. Ban to block
+          system-wide, or dismiss if it&apos;s fine.
+        </p>
+      </div>
+
+      {pending.length === 0 && banned.length === 0 && dismissed.length === 0 ? (
+        <p className="text-sm text-white/40">
+          No crowd-skipped songs yet. When users downvote a playing song 3
+          times, it appears here.
+        </p>
+      ) : null}
+
+      {pending.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-yellow-300">
+            Needs review ({pending.length})
+          </h3>
+          <div className="space-y-2">
+            {pending.map((v) => (
+              <FlaggedCard
+                key={v.videoId}
+                video={v}
+                busyId={busyId}
+                onAction={action}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {banned.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-red-400">
+            Globally banned ({banned.length})
+          </h3>
+          <div className="space-y-2">
+            {banned.map((v) => (
+              <FlaggedCard
+                key={v.videoId}
+                video={v}
+                busyId={busyId}
+                onAction={action}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dismissed.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-white/40">
+            Dismissed ({dismissed.length})
+          </h3>
+          <div className="space-y-1">
+            {dismissed.map((v) => (
+              <FlaggedCard
+                key={v.videoId}
+                video={v}
+                busyId={busyId}
+                onAction={action}
+                dimmed
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlaggedCard({
+  video,
+  busyId,
+  onAction,
+  dimmed,
+}: {
+  video: AdminFlaggedVideo;
+  busyId: string | null;
+  onAction: (videoId: string, action: string) => void;
+  dimmed?: boolean;
+}) {
+  const isBusy = busyId === video.videoId;
+  return (
+    <div
+      className={`card flex items-center gap-3 p-3 ${dimmed ? "opacity-50" : ""}`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={video.thumbnail}
+        alt=""
+        className="h-12 w-20 flex-shrink-0 rounded object-cover"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{video.title}</p>
+        <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-white/50">
+          <span className="text-red-400">
+            {video.skipCount} skip{video.skipCount !== 1 ? "s" : ""}
+          </span>
+          <span>
+            {video.parties.length} part{video.parties.length !== 1 ? "ies" : "y"}
+          </span>
+          <span>Last: {timeAgo(video.lastFlaggedAt)}</span>
+          {video.globallyBanned && (
+            <span className="font-semibold text-red-400">BANNED</span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-shrink-0 gap-1">
+        {!video.globallyBanned ? (
+          <>
+            <button
+              onClick={() => onAction(video.videoId, "ban")}
+              disabled={isBusy}
+              className="rounded bg-red-600/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-600"
+            >
+              Ban
+            </button>
+            {!video.dismissedAt && (
+              <button
+                onClick={() => onAction(video.videoId, "dismiss")}
+                disabled={isBusy}
+                className="rounded bg-white/10 px-2 py-1 text-[10px] font-medium text-white/60 hover:bg-white/20"
+              >
+                Dismiss
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={() => onAction(video.videoId, "unban")}
+            disabled={isBusy}
+            className="rounded bg-white/10 px-2 py-1 text-[10px] font-medium text-white/60 hover:bg-white/20"
+          >
+            Unban
+          </button>
+        )}
+      </div>
     </div>
   );
 }

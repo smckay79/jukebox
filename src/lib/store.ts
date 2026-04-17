@@ -476,6 +476,7 @@ export async function downvoteNowPlaying(
 
   let skipped = false;
   if (party.nowPlaying.downvotes.length >= DOWNVOTE_THRESHOLD) {
+    const skippedSong = party.nowPlaying;
     const prevSource = party.nowPlaying.source;
     if (!isInterstitial(party.nowPlaying)) {
       pushHistory(party, finalizePlayed(party.nowPlaying));
@@ -483,6 +484,15 @@ export async function downvoteNowPlaying(
     party.nowPlaying = null;
     promoteNext(party, prevSource);
     skipped = true;
+    // Fire-and-forget: log to the system-wide flagged videos list.
+    import("./flagged").then(({ recordCrowdSkip }) =>
+      recordCrowdSkip(
+        skippedSong.videoId,
+        skippedSong.title,
+        skippedSong.thumbnail,
+        code.toUpperCase(),
+      ).catch(() => {}),
+    );
   }
 
   await persist(party);

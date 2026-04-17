@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addSong, getHostTier, getParty, toPublicParty } from "@/lib/store";
+import { isGloballyBanned } from "@/lib/flagged";
 import { getClientIp, isIpBanned, logActivity } from "@/lib/stats";
 import { isPartyExpired } from "@/lib/subscription";
 import { getUser } from "@/lib/users";
@@ -36,6 +37,13 @@ export async function POST(
       { status: 400 },
     );
   }
+  if (await isGloballyBanned(videoId)) {
+    return NextResponse.json(
+      { error: "This video isn't available for playback." },
+      { status: 400 },
+    );
+  }
+
   const userId = (body.userId ?? "").toString().slice(0, 64);
   if (!userId) {
     return NextResponse.json({ error: "Missing userId" }, { status: 400 });
