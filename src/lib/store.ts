@@ -583,12 +583,32 @@ export async function songEnded(
   if (!party.nowPlaying || party.nowPlaying.videoId !== videoId) {
     return { ok: true, party };
   }
+  const wasGoldenSkip = !!party.nowPlaying.goldenSkip;
   const prevSource = party.nowPlaying.source;
   if (!isInterstitial(party.nowPlaying)) {
     pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;
-  promoteNext(party, prevSource);
+
+  // Golden skip gets the same skip-bumper treatment as crowd-skip.
+  if (wasGoldenSkip && prevSource !== "bumper") {
+    try {
+      const { pickRandomSkipBumper } = await import("./skip-bumpers");
+      const pick = await pickRandomSkipBumper();
+      if (pick) {
+        party.nowPlaying = makeBumperSong(
+          { videoId: pick.videoId, title: pick.title, thumbnail: pick.thumbnail },
+          Date.now(),
+        );
+      }
+    } catch {
+      /* fall through to normal queue */
+    }
+  }
+  if (!party.nowPlaying) {
+    promoteNext(party, prevSource);
+  }
+
   await persist(party);
   return { ok: true, party };
 }
