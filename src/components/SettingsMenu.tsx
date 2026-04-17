@@ -55,6 +55,7 @@ export default function SettingsMenu({
   onAddBumper,
   onRemoveBumper,
   onListBumpers,
+  isPro = true,
 }: {
   theme?: PartyTheme;
   marquee?: string;
@@ -66,6 +67,7 @@ export default function SettingsMenu({
   onAddBumper: (url: string, triggerType?: "random" | "match", triggerMatch?: string) => Promise<string | null>;
   onRemoveBumper: (videoId: string) => Promise<string | null>;
   onListBumpers: () => Promise<BumperEntry[]>;
+  isPro?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(marquee ?? "");
@@ -313,6 +315,7 @@ export default function SettingsMenu({
               ) : null}
             </section>
 
+            {isPro ? (
             <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
               <h3 className="text-sm font-semibold text-white/80">
                 Scrolling message
@@ -349,7 +352,21 @@ export default function SettingsMenu({
               </div>
               {err ? <p className="text-xs text-red-400">{err}</p> : null}
             </section>
+            ) : (
+            <section className="mt-5 space-y-1 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Scrolling message
+                <span className="ml-2 rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                  Pro
+                </span>
+              </h3>
+              <p className="text-xs text-white/40">
+                Upgrade to show a scrolling message on the TV view.
+              </p>
+            </section>
+            )}
 
+            {isPro ? (
             <section className="mt-5 space-y-3 border-t border-white/10 pt-4">
               <h3 className="text-sm font-semibold text-white/80">
                 Bumper videos
@@ -519,6 +536,19 @@ export default function SettingsMenu({
                 <p className="text-xs text-white/30">No bumpers yet.</p>
               ) : null}
             </section>
+            ) : (
+            <section className="mt-5 space-y-1 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Bumper videos
+                <span className="ml-2 rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                  Pro
+                </span>
+              </h3>
+              <p className="text-xs text-white/40">
+                Upgrade to add short clips that play between songs.
+              </p>
+            </section>
+            )}
           </div>
         </div>
       ) : null}

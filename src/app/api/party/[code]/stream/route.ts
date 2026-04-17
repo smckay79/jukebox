@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { getParty, toPublicParty } from "@/lib/store";
+import { getHostTier, getParty, toPublicParty } from "@/lib/store";
 import { channelFor, createSubscriber } from "@/lib/pubsub";
 import { dropViewer, touchViewer } from "@/lib/stats";
 
@@ -66,9 +66,15 @@ export async function GET(
       // critical to the stream working.
       touchViewer(code, viewerId).catch(() => {});
 
+      // Resolve the host's tier once so we can thread it through toPublicParty
+      // for the time-limit field. Pub/sub pushes won't include it (they use
+      // the raw toPublicParty without tier), but the initial snapshot does,
+      // and the client's safety-net poll re-fetches the full state.
+      const hostTier = await getHostTier(party);
+
       // 1) Push the current state immediately so the client is in sync on
       //    connect/reconnect (covers any updates it might have missed).
-      controller.enqueue(sseEvent(toPublicParty(party)));
+      controller.enqueue(sseEvent(toPublicParty(party, hostTier)));
 
       // 2) If we have a subscriber, forward every publish to the client.
       if (subscriber) {

@@ -134,6 +134,12 @@ export interface PublicParty {
   // When set, the party has been ended by the host — the client switches
   // to a recap view.
   endedAt?: number;
+  // Party time limit info for free-tier hosts. Absent = unlimited.
+  timeLimit?: {
+    limitMs: number;
+    expiresAt: number;
+    expired: boolean;
+  };
 }
 
 // Payload returned by POST /api/party/[code]/end and rendered on the
@@ -186,6 +192,12 @@ export interface User {
   picture?: string;
   createdAt: number;
   lastLoginAt: number;
+  // Epoch ms when current paid period ends. Absent = never paid.
+  subscriptionPaidUntil?: number;
+  // Admin manual override. "pro" grants unlimited access regardless of
+  // payment; "none" revokes even a valid paid subscription (abuse).
+  subscriptionOverride?: "pro" | "none";
+  subscriptionSource?: "admin" | "stripe";
 }
 
 // Same shape exposed to the client. Keeps parity explicit so a future
@@ -195,6 +207,17 @@ export interface PublicUser {
   email: string;
   name: string;
   picture?: string;
+  subscription: SubscriptionInfo;
+}
+
+export type SubscriptionTier = "trial" | "pro" | "free";
+
+export interface SubscriptionInfo {
+  tier: SubscriptionTier;
+  trialEndsAt: number;
+  paidUntil: number | null;
+  daysLeft: number;
+  isOwner: boolean;
 }
 
 // A user-owned playlist they can reuse across parties. Items match the

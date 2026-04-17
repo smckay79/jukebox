@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { getRedis } from "./kv";
+import { getSubscriptionInfo } from "./subscription";
 import type { PublicUser, User } from "./types";
 import { getUser } from "./users";
 
@@ -169,6 +170,7 @@ export function toPublicUser(u: User): PublicUser {
     email: u.email,
     name: u.name,
     picture: u.picture,
+    subscription: getSubscriptionInfo(u),
   };
 }
 

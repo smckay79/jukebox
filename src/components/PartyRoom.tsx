@@ -16,6 +16,7 @@ import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
+import SubscriptionBanner from "./SubscriptionBanner";
 import UserMenu from "./UserMenu";
 import { getAdminKey, getAdminPin, getUserId } from "@/lib/identity";
 import type {
@@ -24,6 +25,7 @@ import type {
   PublicParty,
   PublicUser,
   Song,
+  SubscriptionTier,
 } from "@/lib/types";
 
 export default function PartyRoom({ initial }: { initial: PublicParty }) {
@@ -341,6 +343,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   }
 
   const isAdmin = !!adminKey;
+  const hostTier: SubscriptionTier =
+    isAdmin && authUser?.subscription
+      ? authUser.subscription.tier
+      : "free";
+  const isPro = hostTier === "pro" || hostTier === "trial";
 
   const bannedIds = useMemo(
     () => new Set(party.banned.map((b) => b.videoId)),
@@ -412,6 +419,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               onAddBumper={onAddBumper}
               onRemoveBumper={onRemoveBumper}
               onListBumpers={onListBumpers}
+              isPro={isPro}
             />
           ) : null}
           {isAdmin && adminKey ? (
@@ -432,6 +440,15 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
       </header>
 
 
+
+      {isAdmin ? (
+        <SubscriptionBanner
+          subscription={authUser?.subscription}
+          timeLimit={party.timeLimit}
+        />
+      ) : party.timeLimit?.expired ? (
+        <SubscriptionBanner timeLimit={party.timeLimit} />
+      ) : null}
 
       {/* Mobile: compact now-playing up top, then search, then queue. The
           real video player is opt-in via the header toggle — when on, we
@@ -479,15 +496,17 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           bannedIds={bannedIds}
           country={party.country}
         />
-        <ImportPlaylist
-          code={party.code}
-          bannedIds={bannedIds}
-          onImported={setParty}
-          country={party.country}
-          authUser={authUser}
-          isAdmin={isAdmin}
-          refreshKey={savedPlaylistsVersion}
-        />
+        {isPro ? (
+          <ImportPlaylist
+            code={party.code}
+            bannedIds={bannedIds}
+            onImported={setParty}
+            country={party.country}
+            authUser={authUser}
+            isAdmin={isAdmin}
+            refreshKey={savedPlaylistsVersion}
+          />
+        ) : null}
         <div>
           <h2 className="mb-2 text-lg font-semibold">
             Up next{" "}
@@ -502,6 +521,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onVote={onVote}
             onRemove={isAdmin ? onRemove : undefined}
             onBan={isAdmin ? onBan : undefined}
+            canVote={isPro}
           />
         </div>
         {isAdmin && adminKey ? (

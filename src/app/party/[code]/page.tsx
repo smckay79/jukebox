@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getParty, toPublicParty } from "@/lib/store";
+import { getHostTier, getParty, toPublicParty } from "@/lib/store";
 import PartyRoom from "@/components/PartyRoom";
 
 export const dynamic = "force-dynamic";
@@ -11,5 +11,6 @@ export default async function PartyPage({
 }) {
   const party = await getParty(params.code);
   if (!party) notFound();
-  return <PartyRoom initial={toPublicParty(party)} />;
+  const tier = await getHostTier(party);
+  return <PartyRoom initial={toPublicParty(party, tier)} />;
 }

@@ -23,6 +23,7 @@ export default function Queue({
   onVote,
   onRemove,
   onBan,
+  canVote = true,
 }: {
   party: PublicParty;
   userId: string;
@@ -30,6 +31,7 @@ export default function Queue({
   onVote: (song: Song) => void;
   onRemove?: (song: Song) => void;
   onBan?: (song: Song) => void;
+  canVote?: boolean;
 }) {
   const [msgIndex, setMsgIndex] = useState(() =>
     Math.floor(Math.random() * EMPTY_QUEUE_MESSAGES.length),
@@ -77,15 +79,18 @@ export default function Queue({
               </div>
             </div>
             <button
-              onClick={() => onVote(song)}
+              onClick={() => canVote && onVote(song)}
+              disabled={!canVote}
               className={
                 "flex flex-col items-center rounded-lg px-3 py-1.5 text-sm transition " +
-                (voted
-                  ? "bg-brand-600 text-white"
-                  : "bg-white/5 text-white hover:bg-white/10")
+                (!canVote
+                  ? "cursor-not-allowed bg-white/5 text-white/30"
+                  : voted
+                    ? "bg-brand-600 text-white"
+                    : "bg-white/5 text-white hover:bg-white/10")
               }
               aria-pressed={voted}
-              title={voted ? "Remove your vote" : "Upvote"}
+              title={!canVote ? "Upgrade to Pro to vote" : voted ? "Remove your vote" : "Upvote"}
             >
               <span aria-hidden>▲</span>
               <span className="text-xs font-semibold">

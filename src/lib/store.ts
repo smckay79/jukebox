@@ -9,6 +9,7 @@ import type {
   PlaylistTrack,
   PublicParty,
   Song,
+  SubscriptionTier,
 } from "./types";
 
 // Cap on the per-party history ring buffer. Protects Redis from an
@@ -152,7 +153,21 @@ export function sortQueue(queue: Song[]): Song[] {
   });
 }
 
-export function toPublicParty(p: Party): PublicParty {
+const FREE_PARTY_LIMIT_MS = 60 * 60 * 1000;
+
+export function toPublicParty(
+  p: Party,
+  hostTier?: SubscriptionTier,
+): PublicParty {
+  const unlimited = hostTier === "pro" || hostTier === "trial";
+  const timeLimit =
+    unlimited || hostTier === undefined
+      ? undefined
+      : {
+          limitMs: FREE_PARTY_LIMIT_MS,
+          expiresAt: p.createdAt + FREE_PARTY_LIMIT_MS,
+          expired: Date.now() > p.createdAt + FREE_PARTY_LIMIT_MS,
+        };
   return {
     code: p.code,
     name: p.name,
@@ -168,6 +183,7 @@ export function toPublicParty(p: Party): PublicParty {
     bumpers: p.bumpers?.length ? { count: p.bumpers.length } : undefined,
     country: p.country,
     endedAt: p.endedAt,
+    timeLimit,
   };
 }
 
@@ -317,6 +333,20 @@ export async function createParty(
 export async function getParty(code: string): Promise<Party | null> {
   if (!code) return null;
   return storage().get(code.toUpperCase());
+}
+
+// Resolve the host's subscription tier for a party. Returns "free" for
+// anonymous hosts (no account) so the 1-hour limit applies.
+export async function getHostTier(
+  party: Party,
+): Promise<SubscriptionTier> {
+  if (!party.hostUserId) return "free";
+  // Lazy-import to avoid a circular dep (users → kv ← store).
+  const { getUser } = await import("./users");
+  const { getSubscriptionInfo } = await import("./subscription");
+  const user = await getUser(party.hostUserId);
+  if (!user) return "free";
+  return getSubscriptionInfo(user).tier;
 }
 
 export async function addSong(

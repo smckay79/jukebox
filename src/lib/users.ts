@@ -154,6 +154,9 @@ export async function upsertUserFromGoogle(claims: {
     picture: claims.picture,
     createdAt: existing?.createdAt ?? now,
     lastLoginAt: now,
+    subscriptionPaidUntil: existing?.subscriptionPaidUntil,
+    subscriptionOverride: existing?.subscriptionOverride,
+    subscriptionSource: existing?.subscriptionSource,
   };
   await storage().setUser(user);
   await addUserToIndex(user.id);
@@ -207,6 +210,23 @@ export async function countAllUsers(): Promise<number> {
     __jukeboxUsers?: Map<string, User>;
   };
   return g.__jukeboxUsers?.size ?? 0;
+}
+
+export async function updateUserSubscription(
+  userId: string,
+  update: {
+    subscriptionPaidUntil?: number;
+    subscriptionOverride?: "pro" | "none" | undefined;
+    subscriptionSource?: "admin" | "stripe" | undefined;
+  },
+): Promise<User | null> {
+  const user = await storage().getUser(userId);
+  if (!user) return null;
+  if ("subscriptionPaidUntil" in update) user.subscriptionPaidUntil = update.subscriptionPaidUntil;
+  user.subscriptionOverride = update.subscriptionOverride;
+  user.subscriptionSource = update.subscriptionSource;
+  await storage().setUser(user);
+  return user;
 }
 
 // ---------- saved playlists ----------

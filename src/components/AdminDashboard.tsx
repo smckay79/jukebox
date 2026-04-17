@@ -39,6 +39,11 @@ interface AdminUser {
   picture?: string;
   createdAt: number;
   lastLoginAt: number;
+  subscription: {
+    tier: "trial" | "pro" | "free";
+    daysLeft: number;
+    isOwner: boolean;
+  };
 }
 
 type Tab = "overview" | "parties" | "users";
@@ -198,7 +203,7 @@ export default function AdminDashboard() {
           onEnd={endParty}
         />
       )}
-      {tab === "users" && <UsersTab users={users} />}
+      {tab === "users" && <UsersTab users={users} onUpdate={fetchUsers} />}
     </main>
   );
 }
@@ -384,7 +389,57 @@ function PartiesTab({
   );
 }
 
-function UsersTab({ users }: { users: AdminUser[] }) {
+function TierBadge({ user }: { user: AdminUser }) {
+  const { tier, daysLeft, isOwner } = user.subscription;
+  if (isOwner) {
+    return (
+      <span className="chip bg-yellow-600/30 text-yellow-200 text-xs">
+        Owner
+      </span>
+    );
+  }
+  if (tier === "pro") {
+    return (
+      <span className="chip bg-green-600/30 text-green-200 text-xs">
+        Pro
+      </span>
+    );
+  }
+  if (tier === "trial") {
+    return (
+      <span className="chip bg-blue-600/30 text-blue-200 text-xs">
+        Trial ({daysLeft}d left)
+      </span>
+    );
+  }
+  return (
+    <span className="chip bg-white/10 text-white/50 text-xs">Free</span>
+  );
+}
+
+function UsersTab({
+  users,
+  onUpdate,
+}: {
+  users: AdminUser[];
+  onUpdate: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function setSubscription(userId: string, action: string) {
+    setBusyId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/subscription`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) onUpdate();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div>
       <h2 className="mb-3 text-lg font-semibold">
@@ -409,12 +464,48 @@ function UsersTab({ users }: { users: AdminUser[] }) {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{u.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">{u.name}</p>
+                  <TierBadge user={u} />
+                </div>
                 <p className="text-xs text-white/50">{u.email}</p>
               </div>
-              <div className="text-right text-xs text-white/40">
-                <p>Joined {formatTime(u.createdAt)}</p>
-                <p>Last login {timeAgo(u.lastLoginAt)}</p>
+              <div className="flex items-center gap-2">
+                <div className="hidden text-right text-xs text-white/40 sm:block">
+                  <p>Joined {formatTime(u.createdAt)}</p>
+                  <p>Last login {timeAgo(u.lastLoginAt)}</p>
+                </div>
+                {!u.subscription.isOwner && (
+                  <div className="flex gap-1">
+                    {u.subscription.tier !== "pro" && (
+                      <button
+                        onClick={() => setSubscription(u.id, "setPro")}
+                        disabled={busyId === u.id}
+                        className="rounded bg-green-600/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-green-600"
+                      >
+                        Grant Pro
+                      </button>
+                    )}
+                    {u.subscription.tier === "pro" && (
+                      <button
+                        onClick={() => setSubscription(u.id, "clear")}
+                        disabled={busyId === u.id}
+                        className="rounded bg-white/10 px-2 py-1 text-[10px] font-medium text-white/60 hover:bg-white/20"
+                      >
+                        Clear Override
+                      </button>
+                    )}
+                    {u.subscription.tier !== "free" && (
+                      <button
+                        onClick={() => setSubscription(u.id, "revoke")}
+                        disabled={busyId === u.id}
+                        className="rounded bg-red-600/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-600"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}

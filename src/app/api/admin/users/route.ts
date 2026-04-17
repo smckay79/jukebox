@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
+import { getSubscriptionInfo } from "@/lib/subscription";
 import { getAllUsers } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ export async function GET() {
     picture: u.picture,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt,
+    subscription: getSubscriptionInfo(u),
   }));
 
   return NextResponse.json({ users: safe, total: safe.length });

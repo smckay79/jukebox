@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { addSong, toPublicParty } from "@/lib/store";
+import { addSong, getHostTier, getParty, toPublicParty } from "@/lib/store";
 import { getClientIp, isIpBanned, logActivity } from "@/lib/stats";
+import { isPartyExpired } from "@/lib/subscription";
+import { getUser } from "@/lib/users";
 import { fetchVideoMeta, parseYouTubeId } from "@/lib/youtube";
 
 export const runtime = "nodejs";
@@ -51,6 +53,21 @@ export async function POST(
       },
       { status: 403 },
     );
+  }
+
+  // Enforce 1-hour limit for free-tier hosts.
+  const party = await getParty(params.code);
+  if (party) {
+    const hostUser = party.hostUserId ? await getUser(party.hostUserId) : null;
+    if (isPartyExpired(party.createdAt, hostUser)) {
+      return NextResponse.json(
+        {
+          error: "This party has reached its 1-hour limit. The host needs a Pro subscription for unlimited parties.",
+          reason: "party_time_limit",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   // If the caller already has metadata (e.g. came via /api/search), skip the
