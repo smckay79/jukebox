@@ -103,12 +103,25 @@ export default async function Home() {
             </div>
             <div>
               <h3 className="text-lg font-bold">Pro</h3>
-              <p className="text-3xl font-bold">
-                $4.99
-                <span className="text-base font-normal text-white/50">
-                  /mo
-                </span>
-              </p>
+              <div className="mt-1 flex items-baseline gap-4">
+                <div>
+                  <p className="text-3xl font-bold">
+                    $4.99
+                    <span className="text-base font-normal text-white/50">
+                      /mo
+                    </span>
+                  </p>
+                </div>
+                <div className="border-l border-white/10 pl-4">
+                  <p className="text-3xl font-bold">
+                    $39.99
+                    <span className="text-base font-normal text-white/50">
+                      /yr
+                    </span>
+                  </p>
+                  <p className="text-xs text-emerald-400">Save 33%</p>
+                </div>
+              </div>
             </div>
             <ul className="space-y-2 text-sm text-white/70">
               <li className="flex items-start gap-2">

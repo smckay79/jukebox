@@ -63,11 +63,26 @@ export default function PricingPage() {
           </div>
           <div>
             <h2 className="text-lg font-bold">Pro</h2>
-            <p className="text-3xl font-bold">
-              $4.99
-              <span className="text-base font-normal text-white/50">/mo</span>
-            </p>
-            <p className="mt-1 text-xs text-white/40">
+            <div className="mt-1 flex items-baseline gap-4">
+              <div>
+                <p className="text-3xl font-bold">
+                  $4.99
+                  <span className="text-base font-normal text-white/50">
+                    /mo
+                  </span>
+                </p>
+              </div>
+              <div className="border-l border-white/10 pl-4">
+                <p className="text-3xl font-bold">
+                  $39.99
+                  <span className="text-base font-normal text-white/50">
+                    /yr
+                  </span>
+                </p>
+                <p className="text-xs text-emerald-400">Save 33%</p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-white/40">
               30-day free trial included
             </p>
           </div>

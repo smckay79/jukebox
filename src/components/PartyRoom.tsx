@@ -506,13 +506,33 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             isAdmin={isAdmin}
             refreshKey={savedPlaylistsVersion}
           />
-        ) : null}
+        ) : (
+          <div className="card flex items-center justify-between p-3">
+            <div className="flex items-center gap-2 text-sm text-white/40">
+              <span>Import YouTube playlists</span>
+              <span className="rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-semibold text-brand-300">
+                Pro
+              </span>
+            </div>
+            <a
+              href="/pricing"
+              className="text-xs text-brand-300 underline-offset-2 hover:underline"
+            >
+              Upgrade
+            </a>
+          </div>
+        )}
         <div>
-          <h2 className="mb-2 text-lg font-semibold">
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
             Up next{" "}
             <span className="text-sm font-normal text-white/50">
               · {party.queue.length}
             </span>
+            {!isPro && party.queue.length > 0 ? (
+              <span className="rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-semibold text-brand-300">
+                Voting is Pro
+              </span>
+            ) : null}
           </h2>
           <Queue
             party={party}
@@ -667,11 +687,16 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             </div>
           ) : null}
           <div>
-            <h2 className="mb-2 text-lg font-semibold">
+            <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
               Up next{" "}
               <span className="text-sm font-normal text-white/50">
                 · {party.queue.length}
               </span>
+              {!isPro && party.queue.length > 0 ? (
+                <span className="rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-semibold text-brand-300">
+                  Voting is Pro
+                </span>
+              ) : null}
             </h2>
             <Queue
               party={party}
