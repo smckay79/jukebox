@@ -84,8 +84,8 @@ fun PlayerScreen(
                     }
                 },
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 8.dp)
                     .focusRequester(focusRequester)
                     .focusable(),
                 shape = RoundedCornerShape(8.dp),
