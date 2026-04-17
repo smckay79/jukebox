@@ -1,6 +1,6 @@
 import type { SubscriptionInfo, SubscriptionTier, User } from "./types";
 
-export const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const FREE_PARTY_LIMIT_MS = 60 * 60 * 1000; // 1 hour
 
 const OWNER_EMAILS = new Set(

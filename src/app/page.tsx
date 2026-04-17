@@ -50,7 +50,7 @@ export default async function Home() {
           <h2 className="mb-2 text-xl font-semibold">Start a party</h2>
           <p className="mb-4 text-sm text-white/60">
             You&apos;ll get a private code to share and admin controls to skip
-            or remove tracks. Sign in for a free 30-day Pro trial.
+            or remove tracks. Sign in for a free 7-day Pro trial.
           </p>
           <CreatePartyForm />
         </div>

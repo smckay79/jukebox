@@ -103,7 +103,7 @@ export default function PricingCards() {
       </div>
       <h1 className="mb-2 text-3xl font-bold">Pick your plan</h1>
       <p className="mb-10 text-white/60">
-        Start with a free 30-day trial of everything. After that, upgrade to
+        Start with a free 7-day trial of everything. After that, upgrade to
         keep the party going.
       </p>
 
@@ -169,7 +169,7 @@ export default function PricingCards() {
               </div>
             </div>
             <p className="mt-2 text-xs text-white/40">
-              30-day free trial included
+              7-day free trial included
             </p>
           </div>
           <ul className="space-y-2 text-sm text-white/70">
@@ -255,7 +255,7 @@ export default function PricingCards() {
                 </button>
               </div>
               <p className="text-center text-[11px] text-white/40">
-                Includes 30-day free trial · cancel anytime
+                Includes 7-day free trial · cancel anytime
               </p>
             </div>
           )}
