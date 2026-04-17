@@ -428,6 +428,72 @@ export async function voteSong(
   return { ok: true, votes: song.votes.length, voted, party };
 }
 
+const DOWNVOTE_THRESHOLD = 3;
+const DOWNVOTE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+const DOWNVOTE_MAX_PER_WINDOW = 3;
+
+const downvoteHistory = new Map<string, number[]>();
+
+function canUserDownvote(partyCode: string, userId: string): boolean {
+  const key = `${partyCode}:${userId}`;
+  const times = downvoteHistory.get(key) ?? [];
+  const cutoff = Date.now() - DOWNVOTE_COOLDOWN_MS;
+  const recent = times.filter((t) => t > cutoff);
+  downvoteHistory.set(key, recent);
+  return recent.length < DOWNVOTE_MAX_PER_WINDOW;
+}
+
+function recordDownvote(partyCode: string, userId: string) {
+  const key = `${partyCode}:${userId}`;
+  const times = downvoteHistory.get(key) ?? [];
+  times.push(Date.now());
+  downvoteHistory.set(key, times);
+}
+
+export async function downvoteNowPlaying(
+  code: string,
+  userId: string,
+): Promise<
+  | { ok: true; downvotes: number; skipped: boolean; party: Party }
+  | { ok: false; error: string }
+> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (!party.nowPlaying) return { ok: false, error: "Nothing playing" };
+
+  if (!canUserDownvote(code.toUpperCase(), userId)) {
+    return { ok: false, error: "You've used your skips for now — try again later" };
+  }
+
+  if (!party.nowPlaying.downvotes) party.nowPlaying.downvotes = [];
+  if (party.nowPlaying.downvotes.includes(userId)) {
+    return { ok: false, error: "You already voted to skip this song" };
+  }
+
+  party.nowPlaying.downvotes.push(userId);
+  recordDownvote(code.toUpperCase(), userId);
+
+  let skipped = false;
+  if (party.nowPlaying.downvotes.length >= DOWNVOTE_THRESHOLD) {
+    const prevSource = party.nowPlaying.source;
+    if (!isInterstitial(party.nowPlaying)) {
+      pushHistory(party, finalizePlayed(party.nowPlaying));
+    }
+    party.nowPlaying = null;
+    promoteNext(party, prevSource);
+    skipped = true;
+  }
+
+  await persist(party);
+  return {
+    ok: true,
+    downvotes: skipped ? 0 : (party.nowPlaying?.downvotes?.length ?? 0),
+    skipped,
+    party,
+  };
+}
+
 export async function removeSong(
   code: string,
   songId: string,

@@ -63,13 +63,19 @@ export default function Player({
   onEnded,
   partyCode,
   fill,
+  downvotes = 0,
+  onDownvote,
+  canDownvote = false,
+  hasDownvoted = false,
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
   partyCode?: string;
-  // Edge-to-edge mode for presenter/fullscreen: drops the card chrome and
-  // song-info footer and lets the video fill the parent.
   fill?: boolean;
+  downvotes?: number;
+  onDownvote?: () => void;
+  canDownvote?: boolean;
+  hasDownvoted?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -190,6 +196,23 @@ export default function Player({
             </span>
           </button>
         ) : null}
+        {/* Downvote X marks overlay */}
+        {song && downvotes > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-4">
+            {Array.from({ length: Math.min(downvotes, 3) }).map((_, i) => (
+              <div
+                key={i}
+                className="flex h-16 w-16 items-center justify-center rounded-xl border-4 border-red-500 bg-red-600/30 text-4xl font-black text-red-500 shadow-lg backdrop-blur-sm md:h-24 md:w-24 md:text-6xl"
+                style={{
+                  animation: "downvoteIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                  animationDelay: `${i * 0.15}s`,
+                }}
+              >
+                X
+              </div>
+            ))}
+          </div>
+        ) : null}
         {/* QR overlay so latecomers can scan straight off the TV. Pointer
             events disabled so it never steals clicks from the iframe. */}
         {song && partyCode ? (
@@ -206,12 +229,28 @@ export default function Player({
             alt=""
             className="h-10 w-16 rounded object-cover"
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{song.title}</div>
             <div className="text-xs text-white/50">
               Added by {song.addedBy}
             </div>
           </div>
+          {onDownvote && canDownvote ? (
+            <button
+              type="button"
+              onClick={onDownvote}
+              disabled={hasDownvoted}
+              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                hasDownvoted
+                  ? "bg-red-600/20 text-red-400"
+                  : "bg-white/10 text-white/60 hover:bg-red-600/20 hover:text-red-400"
+              }`}
+              title={hasDownvoted ? "You voted to skip" : "Vote to skip this song"}
+            >
+              <span className="text-base">✕</span>
+              <span>{downvotes}/3</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -294,6 +294,28 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "ban", url: raw });
   }
 
+  const [downvoteBusy, setDownvoteBusy] = useState(false);
+
+  async function onDownvote() {
+    if (!party.nowPlaying || downvoteBusy) return;
+    setDownvoteBusy(true);
+    try {
+      const res = await fetch(`/api/party/${party.code}/downvote`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setParty(data.party as PublicParty);
+      }
+    } catch {
+      refresh();
+    } finally {
+      setDownvoteBusy(false);
+    }
+  }
+
   async function onSetTheme(theme: PartyTheme | null): Promise<string | null> {
     return adminPost({ action: "theme", theme });
   }
@@ -462,6 +484,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               song={party.nowPlaying}
               onEnded={onEnded}
               partyCode={party.code}
+              downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+              onDownvote={isPro ? onDownvote : undefined}
+              canDownvote={isPro && !!party.nowPlaying}
+              hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
             />
             {isAdmin && party.nowPlaying ? (
               <div className="flex justify-end gap-2">
@@ -636,6 +662,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                 onEnded={onEnded}
                 partyCode={party.code}
                 fill={presenterMode}
+                downvotes={party.nowPlaying?.downvotes?.length ?? 0}
+                onDownvote={isPro ? onDownvote : undefined}
+                canDownvote={isPro && !!party.nowPlaying}
+                hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
               />
             </div>
 

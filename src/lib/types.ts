@@ -7,6 +7,7 @@ export interface Song {
   addedByUserId: string;
   addedAt: number;
   votes: string[]; // userIds that upvoted
+  downvotes?: string[]; // userIds that downvoted nowPlaying
   // "user" = someone added this through search/url/vote (default, omitted
   // on legacy rows). "playlist" = promoted from the party's background
   // playlist; these are interruptible and never written to history.
