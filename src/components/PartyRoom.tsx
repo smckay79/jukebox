@@ -362,38 +362,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     );
   }
 
-  // Tiny status pill for the background playlist — rendered on both
-  // mobile and desktop. Shows whether the current track is a loop pick,
-  // and gives hosts a quick clear control.
-  const playlistStatus = party.playlist ? (
-    <div className="card flex flex-wrap items-center justify-between gap-2 p-3 text-xs">
-      <div>
-        <span className="font-semibold text-brand-300">Party playlist</span>
-        <span className="text-white/60">
-          {" "}
-          · {party.playlist.count} track
-          {party.playlist.count === 1 ? "" : "s"} looping in the background
-          {party.nowPlaying?.source === "playlist" ? (
-            <span className="text-white/50"> · playing now</span>
-          ) : (
-            <span className="text-white/40">
-              {" "}
-              · paused while the queue runs
-            </span>
-          )}
-        </span>
-      </div>
-      {isAdmin ? (
-        <button
-          type="button"
-          onClick={onClearPlaylist}
-          className="text-white/70 underline-offset-2 hover:text-white hover:underline"
-        >
-          Clear
-        </button>
-      ) : null}
-    </div>
-  ) : null;
 
   return (
     <>
@@ -519,7 +487,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           isAdmin={isAdmin}
           refreshKey={savedPlaylistsVersion}
         />
-        {isAdmin ? playlistStatus : null}
         <div>
           <h2 className="mb-2 text-lg font-semibold">
             Up next{" "}
@@ -580,8 +547,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             authUser={authUser}
             isAdmin={isAdmin}
           />
-          {isAdmin ? playlistStatus : null}
-          <div
+            <div
             ref={presenterRef}
             className={
               presenterMode
