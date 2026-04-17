@@ -50,7 +50,7 @@ export default async function Home() {
           <h2 className="mb-2 text-xl font-semibold">Start a party</h2>
           <p className="mb-4 text-sm text-white/60">
             You&apos;ll get a private code to share and admin controls to skip
-            or remove tracks. Sign in for unlimited party length.
+            or remove tracks. Sign in for a free 30-day Pro trial.
           </p>
           <CreatePartyForm />
         </div>
@@ -63,6 +63,86 @@ export default async function Home() {
           <JoinForm />
         </div>
       </div>
+
+      <section className="mt-16">
+        <h2 className="mb-6 text-center text-2xl font-bold">
+          Free to start, Pro when you&apos;re ready
+        </h2>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="card space-y-4 p-6">
+            <div>
+              <h3 className="text-lg font-bold">Free</h3>
+              <p className="text-3xl font-bold">
+                $0
+                <span className="text-base font-normal text-white/50">/mo</span>
+              </p>
+            </div>
+            <ul className="space-y-2 text-sm text-white/70">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-white/30">—</span>
+                Create parties
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-white/30">—</span>
+                Search &amp; add songs
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-white/30">—</span>
+                1-hour party limit
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-white/30">—</span>
+                Basic backgrounds
+              </li>
+            </ul>
+          </div>
+
+          <div className="card relative space-y-4 border border-brand-500/30 bg-gradient-to-br from-brand-900/30 to-brand-800/10 p-6">
+            <div className="absolute -top-3 right-4 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold">
+              30-day free trial
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">Pro</h3>
+              <p className="text-3xl font-bold">
+                $4.99
+                <span className="text-base font-normal text-white/50">
+                  /mo
+                </span>
+              </p>
+            </div>
+            <ul className="space-y-2 text-sm text-white/70">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Unlimited party time
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Saved playlists &amp; pre-load parties
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Import YouTube playlists
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Bumper videos between songs
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Queue upvoting
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Custom backgrounds &amp; logos
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand-400">✓</span>
+                Scrolling marquee messages
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <footer className="mt-16 text-center text-sm text-white/40">
         <p>v1 · real-time push &amp; sign-in coming soon. Have fun out there.</p>
