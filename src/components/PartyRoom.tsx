@@ -318,6 +318,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
   async function onGoldenDownvote() {
     if (!party.nowPlaying || downvoteBusy) return;
+    if (!confirm(`Skip "${party.nowPlaying.title}"?`)) return;
     setDownvoteBusy(true);
     try {
       const res = await fetch(`/api/party/${party.code}/downvote`, {
