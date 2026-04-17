@@ -41,7 +41,7 @@ export default function PricingCards() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function startCheckout(plan: "monthly" | "yearly") {
+  async function startCheckout(plan: "monthly" | "yearly" | "lifetime") {
     setBusy(plan);
     setError(null);
     try {
@@ -123,7 +123,7 @@ export default function PricingCards() {
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         {/* Free tier */}
         <div className="card space-y-4 p-6">
           <div>
@@ -145,7 +145,7 @@ export default function PricingCards() {
         {/* Pro tier */}
         <div className="card relative space-y-4 border border-brand-500/30 bg-gradient-to-br from-brand-900/30 to-brand-800/10 p-6">
           <div className="absolute -top-3 right-4 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold">
-            Recommended
+            Introductory pricing
           </div>
           <div>
             <h2 className="text-lg font-bold">Pro</h2>
@@ -258,6 +258,63 @@ export default function PricingCards() {
                 Includes 30-day free trial · cancel anytime
               </p>
             </div>
+          )}
+        </div>
+
+        {/* Lifetime tier */}
+        <div className="card relative space-y-4 border border-emerald-500/30 bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 p-6">
+          <div className="absolute -top-3 right-4 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold">
+            Best value
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Lifetime</h2>
+            <p className="text-3xl font-bold">
+              $74.99
+              <span className="text-base font-normal text-white/50">
+                {" "}one-time
+              </span>
+            </p>
+            <p className="mt-2 text-xs text-white/40">
+              Pay once, party forever
+            </p>
+          </div>
+          <ul className="space-y-2 text-sm text-white/70">
+            {PRO_FEATURES.map((f) => (
+              <li key={f} className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-400">✓</span>
+                {f}
+              </li>
+            ))}
+            <li className="flex items-start gap-2">
+              <span className="mt-0.5 text-emerald-400">✓</span>
+              <span className="font-medium text-emerald-300">
+                All future updates included
+              </span>
+            </li>
+          </ul>
+
+          {loading ? (
+            <div className="h-10" />
+          ) : !user ? (
+            <Link
+              href="/login?next=/pricing"
+              className="btn-primary block w-full !bg-emerald-600 text-center hover:!bg-emerald-500"
+            >
+              Sign in to get started
+            </Link>
+          ) : isPaid ? (
+            <div className="rounded-lg bg-emerald-900/30 px-3 py-2 text-center text-sm text-emerald-300">
+              You&apos;re on Pro
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-primary w-full !bg-emerald-600 text-center hover:!bg-emerald-500"
+              onClick={() => startCheckout("lifetime")}
+              disabled={busy !== null}
+            >
+              {busy === "lifetime" ? "Loading…" : "Get lifetime access — $74.99"}
+            </button>
           )}
         </div>
       </div>

@@ -47,7 +47,23 @@ export async function POST(req: Request) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode === "subscription" && session.customer && session.subscription) {
+
+      if (session.mode === "payment" && session.metadata?.plan === "lifetime") {
+        const customerId = getCustomerId(session.customer);
+        if (customerId) {
+          const user = await getUserByStripeCustomerId(customerId);
+          if (user) {
+            const lifetime = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+            await updateUserStripeFields(user.id, {
+              subscriptionPaidUntil: lifetime,
+              subscriptionSource: "stripe",
+            });
+            console.log(
+              `[stripe] checkout.session.completed (lifetime) → user ${user.email} pro forever`,
+            );
+          }
+        }
+      } else if (session.mode === "subscription" && session.customer && session.subscription) {
         const customerId = getCustomerId(session.customer);
         const subscriptionId =
           typeof session.subscription === "string"

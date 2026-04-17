@@ -7,6 +7,8 @@ import { TRIAL_DURATION_MS } from "@/lib/subscription";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const LIFETIME_MS = 100 * 365 * 24 * 60 * 60 * 1000; // 100 years
+
 export async function POST(req: Request) {
   const stripe = getStripe();
   if (!stripe) {
@@ -28,11 +30,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const plan = body.plan === "yearly" ? "yearly" : "monthly";
+  const plan =
+    body.plan === "yearly"
+      ? "yearly"
+      : body.plan === "lifetime"
+        ? "lifetime"
+        : "monthly";
+
   const priceId =
-    plan === "yearly"
-      ? process.env.STRIPE_PRICE_YEARLY
-      : process.env.STRIPE_PRICE_MONTHLY;
+    plan === "lifetime"
+      ? process.env.STRIPE_PRICE_LIFETIME
+      : plan === "yearly"
+        ? process.env.STRIPE_PRICE_YEARLY
+        : process.env.STRIPE_PRICE_MONTHLY;
 
   if (!priceId) {
     return NextResponse.json(
@@ -52,14 +62,27 @@ export async function POST(req: Request) {
     await updateUserStripeFields(user.id, { stripeCustomerId: customerId });
   }
 
+  const appUrl = getAppUrl();
+
+  if (plan === "lifetime") {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${appUrl}/pricing?success=1`,
+      cancel_url: `${appUrl}/pricing?canceled=1`,
+      metadata: { userId: user.id, plan: "lifetime" },
+      allow_promotion_codes: true,
+    });
+    return NextResponse.json({ url: session.url });
+  }
+
   const trialEnd = user.createdAt + TRIAL_DURATION_MS;
   const now = Date.now();
   const trialRemaining = Math.max(0, trialEnd - now);
   const trialDays = Math.ceil(trialRemaining / (24 * 60 * 60 * 1000));
   const hasActiveSub =
     user.subscriptionPaidUntil && user.subscriptionPaidUntil > now;
-
-  const appUrl = getAppUrl();
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,

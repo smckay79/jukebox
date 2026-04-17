@@ -68,7 +68,7 @@ export default async function Home() {
         <h2 className="mb-6 text-center text-2xl font-bold">
           Free to start, Pro when you&apos;re ready
         </h2>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <div className="card space-y-4 p-6">
             <div>
               <h3 className="text-lg font-bold">Free</h3>
@@ -99,7 +99,7 @@ export default async function Home() {
 
           <div className="card relative space-y-4 border border-brand-500/30 bg-gradient-to-br from-brand-900/30 to-brand-800/10 p-6">
             <div className="absolute -top-3 right-4 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold">
-              30-day free trial
+              Introductory pricing
             </div>
             <div>
               <h3 className="text-lg font-bold">Pro</h3>
@@ -151,6 +151,38 @@ export default async function Home() {
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-brand-400">✓</span>
                 Scrolling marquee messages
+              </li>
+            </ul>
+          </div>
+
+          <div className="card relative space-y-4 border border-emerald-500/30 bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 p-6">
+            <div className="absolute -top-3 right-4 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold">
+              Best value
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">Lifetime</h3>
+              <p className="text-3xl font-bold">
+                $74.99
+                <span className="text-base font-normal text-white/50">
+                  {" "}one-time
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-white/40">
+                Pay once, party forever
+              </p>
+            </div>
+            <ul className="space-y-2 text-sm text-white/70">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-400">✓</span>
+                Everything in Pro
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-400">✓</span>
+                No recurring payments
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-400">✓</span>
+                All future updates included
               </li>
             </ul>
           </div>
