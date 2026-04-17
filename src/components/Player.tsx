@@ -235,7 +235,7 @@ export default function Player({
             </div>
             <div className="absolute bottom-8 text-center" style={{ animation: "goldenTextIn 0.5s ease-out 0.4s both" }}>
               <div className="text-lg font-bold tracking-widest text-yellow-400 drop-shadow-lg md:text-2xl">
-                HOST SKIP
+                GOLDEN DOWNVOTE
               </div>
             </div>
           </div>
