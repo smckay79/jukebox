@@ -283,11 +283,10 @@ export default function Player({
             <button
               type="button"
               onClick={onGoldenDownvote}
-              className="flex items-center gap-1 rounded-lg bg-yellow-500/20 px-3 py-1.5 text-sm font-medium text-yellow-400 transition hover:bg-yellow-500/30"
-              title="Host skip — instantly skips this song"
+              className="rounded-lg bg-gradient-to-r from-yellow-500/30 to-amber-500/30 px-4 py-1.5 text-sm font-bold text-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition hover:from-yellow-500/40 hover:to-amber-500/40 hover:shadow-[0_0_18px_rgba(250,204,21,0.4)]"
+              title="Golden Downvote — instantly skips this song"
             >
-              <span className="text-base" style={{ filter: "drop-shadow(0 0 4px rgba(250,204,21,0.6))" }}>✕</span>
-              <span>Skip</span>
+              Golden Downvote
             </button>
           ) : onDownvote && canDownvote ? (
             <button
