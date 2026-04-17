@@ -164,6 +164,7 @@ export function toPublicParty(p: Party): PublicParty {
     playlist: p.playlist
       ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
       : undefined,
+    bumpers: p.bumpers?.length ? { count: p.bumpers.length } : undefined,
     country: p.country,
     endedAt: p.endedAt,
   };
@@ -174,23 +175,43 @@ export function toPublicParty(p: Party): PublicParty {
 // by earliest addedAt). When the user queue is empty and a playlist is
 // set, loop through its items — cursor advances as each playlist track
 // leaves nowPlaying (see advanceOnLeaving below).
-function promoteNext(party: Party) {
+function promoteNext(party: Party, prevSource?: string) {
   if (party.nowPlaying) return;
   const now = Date.now();
+
+  // Random bumper between songs — ~30% chance, never back-to-back.
+  const bumpers = party.bumpers ?? [];
+  if (
+    bumpers.length > 0 &&
+    prevSource !== "bumper" &&
+    Math.random() < 0.3
+  ) {
+    const pick = bumpers[Math.floor(Math.random() * bumpers.length)];
+    party.nowPlaying = {
+      id: makeId(),
+      videoId: pick.videoId,
+      title: pick.title,
+      thumbnail: pick.thumbnail,
+      addedBy: "Bumper",
+      addedByUserId: "__bumper",
+      addedAt: now,
+      votes: [],
+      source: "bumper",
+      startedAt: now,
+    };
+    return;
+  }
+
   const sorted = sortQueue(party.queue);
   const next = sorted[0];
   if (next) {
     party.queue = party.queue.filter((s) => s.id !== next.id);
-    // Stamp the moment this song started playing, so skip/ended can
-    // compute actual play duration for the recap.
     party.nowPlaying = { ...next, startedAt: now };
     return;
   }
   // No user songs — pull from the background playlist if one is set.
   const pl = party.playlist;
   if (!pl || pl.items.length === 0) return;
-  // Skip over any banned items (a host might ban a song that's also in
-  // their playlist). If every item is banned we just give up.
   const banned = new Set(party.banned.map((b) => b.videoId));
   for (let tries = 0; tries < pl.items.length; tries++) {
     const idx = ((pl.cursor % pl.items.length) + pl.items.length) % pl.items.length;
@@ -228,6 +249,10 @@ function finalizePlayed(song: Song): Song {
 // promotion — i.e. safe to interrupt and skip logging to history.
 function isPlaylistTrack(s: Song | null | undefined): boolean {
   return !!s && s.source === "playlist";
+}
+
+function isInterstitial(s: Song | null | undefined): boolean {
+  return !!s && (s.source === "playlist" || s.source === "bumper");
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -312,10 +337,9 @@ export async function addSong(
     source: "user",
   };
   party.queue.push(song);
-  // Interrupt a background-playlist track the moment a real user song
-  // arrives — the user expects their pick to start right away, not after
-  // the current loop track finishes.
-  if (isPlaylistTrack(party.nowPlaying)) {
+  // Interrupt a background/bumper track the moment a real user song
+  // arrives — the user expects their pick to start right away.
+  if (isInterstitial(party.nowPlaying)) {
     party.nowPlaying = null;
   }
   if (!party.nowPlaying) promoteNext(party);
@@ -375,13 +399,12 @@ export async function skipCurrent(
   const party = await s.get(code.toUpperCase());
   if (!party) return { ok: false, error: "Party not found" };
 
-  // Playlist loop tracks don't count as "played" — they don't go into
-  // history and we just advance to the next cursor item.
-  if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
+  const prevSource = party.nowPlaying?.source;
+  if (party.nowPlaying && !isInterstitial(party.nowPlaying)) {
     pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;
-  promoteNext(party);
+  promoteNext(party, prevSource);
   await persist(party);
   return { ok: true, party };
 }
@@ -398,11 +421,12 @@ export async function songEnded(
   if (!party.nowPlaying || party.nowPlaying.videoId !== videoId) {
     return { ok: true, party };
   }
-  if (!isPlaylistTrack(party.nowPlaying)) {
+  const prevSource = party.nowPlaying.source;
+  if (!isInterstitial(party.nowPlaying)) {
     pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;
-  promoteNext(party);
+  promoteNext(party, prevSource);
   await persist(party);
   return { ok: true, party };
 }
@@ -574,6 +598,42 @@ export async function clearPartyPlaylist(
   return { ok: true, party };
 }
 
+// ---------- bumper videos ----------
+
+export async function addBumper(
+  code: string,
+  input: { videoId: string; title: string; thumbnail: string },
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (!party.bumpers) party.bumpers = [];
+  if (party.bumpers.some((b) => b.videoId === input.videoId)) {
+    return { ok: true, party };
+  }
+  party.bumpers.push({
+    videoId: input.videoId,
+    title: input.title.slice(0, 200) || "Bumper",
+    thumbnail:
+      input.thumbnail ||
+      `https://i.ytimg.com/vi/${input.videoId}/hqdefault.jpg`,
+  });
+  await persist(party);
+  return { ok: true, party };
+}
+
+export async function removeBumper(
+  code: string,
+  videoId: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  party.bumpers = (party.bumpers ?? []).filter((b) => b.videoId !== videoId);
+  await persist(party);
+  return { ok: true, party };
+}
+
 // Pass `null` (or an empty string) to clear and fall back to auto-detection.
 // Anything else must be ISO 3166-1 alpha-2 — two letters, no digits — or we
 // reject. We don't validate against a specific list because YouTube may add
@@ -621,7 +681,7 @@ export async function endParty(
   if (party.endedAt) {
     return { ok: true, party, alreadyEnded: true };
   }
-  if (party.nowPlaying && !isPlaylistTrack(party.nowPlaying)) {
+  if (party.nowPlaying && !isInterstitial(party.nowPlaying)) {
     pushHistory(party, finalizePlayed(party.nowPlaying));
   }
   party.nowPlaying = null;

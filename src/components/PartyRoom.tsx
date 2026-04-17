@@ -307,6 +307,14 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     await adminPost({ action: "clearPlaylist" });
   }
 
+  async function onAddBumper(url: string): Promise<string | null> {
+    return adminPost({ action: "addBumper", url });
+  }
+
+  async function onRemoveBumper(videoId: string): Promise<string | null> {
+    return adminPost({ action: "removeBumper", videoId });
+  }
+
   const isAdmin = !!adminKey;
 
   const bannedIds = useMemo(
@@ -404,9 +412,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               theme={party.theme}
               marquee={party.marquee}
               country={party.country}
+              bumperCount={party.bumpers?.count ?? 0}
               onSetTheme={onSetTheme}
               onSetMarquee={onSetMarquee}
               onSetCountry={onSetCountry}
+              onAddBumper={onAddBumper}
+              onRemoveBumper={onRemoveBumper}
             />
           ) : null}
           {isAdmin && adminKey ? (

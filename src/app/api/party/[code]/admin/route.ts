@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  addBumper,
   banVideo,
   clearPartyPlaylist,
+  removeBumper,
   removeSong,
   setCountry,
   setMarquee,
@@ -176,6 +178,41 @@ export async function POST(
     }
     await unbanIp(params.code, ip);
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "addBumper") {
+    let videoId = body.videoId ?? "";
+    if (body.url) videoId = parseYouTubeId(body.url) ?? videoId;
+    videoId = videoId.toString().trim();
+    if (!videoId) {
+      return NextResponse.json({ error: "Missing videoId or url" }, { status: 400 });
+    }
+    let title = (body.title ?? "").toString().trim();
+    let thumbnail = (body.thumbnail ?? "").toString().trim();
+    if (!title || !thumbnail) {
+      const meta = await fetchVideoMeta(videoId);
+      if (meta) {
+        title = title || meta.title;
+        thumbnail = thumbnail || meta.thumbnail;
+      }
+    }
+    const res = await addBumper(params.code, { videoId, title, thumbnail });
+    if (!res.ok) {
+      return NextResponse.json({ error: res.error }, { status: 404 });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "removeBumper") {
+    const videoId = (body.videoId ?? "").toString().trim();
+    if (!videoId) {
+      return NextResponse.json({ error: "Missing videoId" }, { status: 400 });
+    }
+    const res = await removeBumper(params.code, videoId);
+    if (!res.ok) {
+      return NextResponse.json({ error: res.error }, { status: 404 });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

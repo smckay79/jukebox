@@ -10,7 +10,7 @@ export interface Song {
   // "user" = someone added this through search/url/vote (default, omitted
   // on legacy rows). "playlist" = promoted from the party's background
   // playlist; these are interruptible and never written to history.
-  source?: "user" | "playlist";
+  source?: "user" | "playlist" | "bumper";
   // Wall-clock epoch ms at which this song became `nowPlaying`. Set when
   // promoted; used on skip/ended to compute `playedSeconds`. Legacy rows
   // (played before this field existed) leave it undefined.
@@ -47,6 +47,12 @@ export interface PlaylistTrack {
   thumbnail: string;
 }
 
+export interface BumperVideo {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+}
+
 export interface PartyPlaylist {
   items: PlaylistTrack[];
   cursor: number; // next track to promote when queue is empty
@@ -72,6 +78,8 @@ export interface Party {
   // whenever the user queue is empty; user-added songs interrupt and take
   // priority. Absent = no background playlist set.
   playlist?: PartyPlaylist;
+  // Short interstitial videos that play randomly between songs.
+  bumpers?: BumperVideo[];
   // ISO 3166-1 alpha-2 country code. When set, search results and playlist
   // imports are filtered to videos playable in this country — overriding
   // the auto-detected region from the request. Absent = use auto-detect.
@@ -112,6 +120,7 @@ export interface PublicParty {
   // background"), without shipping every item to every client on each SSE
   // frame.
   playlist?: { count: number; setAt: number };
+  bumpers?: { count: number };
   // See Party.country — exposed so the admin settings menu can show the
   // current selection, and so the guest client can attach it to search.
   country?: string;

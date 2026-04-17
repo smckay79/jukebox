@@ -36,20 +36,32 @@ const COUNTRY_OPTIONS: Array<{ code: string; label: string }> = [
   { code: "ZA", label: "South Africa" },
 ];
 
+interface BumperEntry {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+}
+
 export default function SettingsMenu({
   theme,
   marquee,
   country,
+  bumperCount,
   onSetTheme,
   onSetMarquee,
   onSetCountry,
+  onAddBumper,
+  onRemoveBumper,
 }: {
   theme?: PartyTheme;
   marquee?: string;
   country?: string;
+  bumperCount?: number;
   onSetTheme: (next: PartyTheme | null) => Promise<string | null>;
   onSetMarquee: (text: string) => Promise<string | null>;
   onSetCountry: (next: string | null) => Promise<string | null>;
+  onAddBumper: (url: string) => Promise<string | null>;
+  onRemoveBumper: (videoId: string) => Promise<string | null>;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(marquee ?? "");
@@ -59,6 +71,10 @@ export default function SettingsMenu({
   const [countryBusy, setCountryBusy] = useState(false);
   const [countryFlash, setCountryFlash] = useState(false);
   const [countryErr, setCountryErr] = useState<string | null>(null);
+  const [bumperUrl, setBumperUrl] = useState("");
+  const [bumperBusy, setBumperBusy] = useState(false);
+  const [bumperErr, setBumperErr] = useState<string | null>(null);
+  const [bumperFlash, setBumperFlash] = useState(false);
 
   // Re-sync the textarea whenever the persisted marquee changes from the
   // server (another admin device, or a load).
@@ -214,6 +230,56 @@ export default function SettingsMenu({
                 </div>
               </div>
               {err ? <p className="text-xs text-red-400">{err}</p> : null}
+            </section>
+
+            <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Bumper videos
+                {(bumperCount ?? 0) > 0 ? (
+                  <span className="ml-1 font-normal text-white/40">
+                    ({bumperCount})
+                  </span>
+                ) : null}
+              </h3>
+              <p className="text-xs text-white/50">
+                Short clips that play randomly between songs — intros,
+                hype reels, funny clips, whatever. Paste a YouTube link
+                to add one.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={bumperUrl}
+                  onChange={(e) => setBumperUrl(e.target.value)}
+                  placeholder="Paste a YouTube link"
+                  className="input flex-1 text-sm"
+                />
+                <button
+                  type="button"
+                  className="btn-primary !px-3 !py-1.5 text-sm"
+                  disabled={bumperBusy || !bumperUrl.trim()}
+                  onClick={async () => {
+                    setBumperBusy(true);
+                    setBumperErr(null);
+                    const e = await onAddBumper(bumperUrl.trim());
+                    setBumperBusy(false);
+                    if (e) {
+                      setBumperErr(e);
+                    } else {
+                      setBumperUrl("");
+                      setBumperFlash(true);
+                      setTimeout(() => setBumperFlash(false), 1200);
+                    }
+                  }}
+                >
+                  {bumperBusy ? "Adding…" : "Add"}
+                </button>
+              </div>
+              {bumperFlash ? (
+                <span className="text-xs text-emerald-300">Added!</span>
+              ) : null}
+              {bumperErr ? (
+                <p className="text-xs text-red-400">{bumperErr}</p>
+              ) : null}
             </section>
           </div>
         </div>
