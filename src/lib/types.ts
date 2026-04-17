@@ -201,6 +201,8 @@ export interface User {
   // payment; "none" revokes even a valid paid subscription (abuse).
   subscriptionOverride?: "pro" | "none";
   subscriptionSource?: "admin" | "stripe";
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 // Same shape exposed to the client. Keeps parity explicit so a future

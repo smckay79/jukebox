@@ -126,10 +126,38 @@ export default function UserMenu({
             <div className="truncate font-medium">{user.name}</div>
             <div className="truncate text-white/50">{user.email}</div>
           </div>
+          <Link
+            href="/pricing"
+            onClick={() => setOpen(false)}
+            className="mt-1 flex items-center justify-between rounded-md px-2 py-1.5 text-sm text-white/80 hover:bg-white/10"
+          >
+            <span>
+              {user.subscription.tier === "pro"
+                ? "Manage plan"
+                : user.subscription.tier === "trial"
+                  ? "Upgrade to Pro"
+                  : "Upgrade to Pro"}
+            </span>
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                user.subscription.tier === "pro"
+                  ? "bg-emerald-600/30 text-emerald-300"
+                  : user.subscription.tier === "trial"
+                    ? "bg-brand-600/30 text-brand-300"
+                    : "bg-white/10 text-white/40"
+              }`}
+            >
+              {user.subscription.tier === "pro"
+                ? "Pro"
+                : user.subscription.tier === "trial"
+                  ? "Trial"
+                  : "Free"}
+            </span>
+          </Link>
           <button
             type="button"
             onClick={signOut}
-            className="mt-1 block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/80 hover:bg-white/10"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/80 hover:bg-white/10"
           >
             Sign out
           </button>

@@ -157,6 +157,8 @@ export async function upsertUserFromGoogle(claims: {
     subscriptionPaidUntil: existing?.subscriptionPaidUntil,
     subscriptionOverride: existing?.subscriptionOverride,
     subscriptionSource: existing?.subscriptionSource,
+    stripeCustomerId: existing?.stripeCustomerId,
+    stripeSubscriptionId: existing?.stripeSubscriptionId,
   };
   await storage().setUser(user);
   await addUserToIndex(user.id);
@@ -225,6 +227,32 @@ export async function updateUserSubscription(
   if ("subscriptionPaidUntil" in update) user.subscriptionPaidUntil = update.subscriptionPaidUntil;
   user.subscriptionOverride = update.subscriptionOverride;
   user.subscriptionSource = update.subscriptionSource;
+  await storage().setUser(user);
+  return user;
+}
+
+export async function getUserByStripeCustomerId(
+  customerId: string,
+): Promise<User | null> {
+  const all = await getAllUsers();
+  return all.find((u) => u.stripeCustomerId === customerId) ?? null;
+}
+
+export async function updateUserStripeFields(
+  userId: string,
+  fields: {
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    subscriptionPaidUntil?: number;
+    subscriptionSource?: "admin" | "stripe" | undefined;
+  },
+): Promise<User | null> {
+  const user = await storage().getUser(userId);
+  if (!user) return null;
+  if (fields.stripeCustomerId !== undefined) user.stripeCustomerId = fields.stripeCustomerId;
+  if (fields.stripeSubscriptionId !== undefined) user.stripeSubscriptionId = fields.stripeSubscriptionId;
+  if (fields.subscriptionPaidUntil !== undefined) user.subscriptionPaidUntil = fields.subscriptionPaidUntil;
+  if (fields.subscriptionSource !== undefined) user.subscriptionSource = fields.subscriptionSource;
   await storage().setUser(user);
   return user;
 }
