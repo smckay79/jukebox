@@ -117,14 +117,6 @@ export default function Player({
           events: {
             onReady: (e) => {
               e.target.playVideo();
-              // If autoplay was blocked by the browser, the state stays
-              // at -1 (unstarted) or 5 (cued). Show a tap-to-play overlay.
-              setTimeout(() => {
-                try {
-                  const st = e.target.getPlayerState();
-                  if (st === -1 || st === 5) setNeedsTap(true);
-                } catch { /* destroyed */ }
-              }, 800);
             },
             onStateChange: (e) => {
               if (e.data === 1) setNeedsTap(false);
@@ -135,11 +127,22 @@ export default function Player({
           },
         });
         currentVideoRef.current = song.videoId;
+
+        // Check after a beat whether the browser blocked autoplay.
+        // State -1 = unstarted, 5 = cued — both mean it didn't start.
+        setTimeout(() => {
+          if (cancelled) return;
+          try {
+            const st = playerRef.current?.getPlayerState();
+            if (st === -1 || st === 5) setNeedsTap(true);
+          } catch { /* destroyed */ }
+        }, 1500);
       } else if (
         playerRef.current &&
         currentVideoRef.current !== song.videoId
       ) {
         playerRef.current.loadVideoById(song.videoId);
+        playerRef.current.playVideo();
         currentVideoRef.current = song.videoId;
       }
     });
@@ -183,7 +186,7 @@ export default function Player({
           >
             <span className="text-4xl">▶</span>
             <span className="text-sm font-medium text-white/80">
-              Tap to play
+              Click to play
             </span>
           </button>
         ) : null}
