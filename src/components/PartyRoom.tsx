@@ -48,7 +48,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // Mobile video playback is opt-in — guests are usually just queueing songs
   // and don't want to burn mobile data on an iframe. When toggled on we
   // swap the compact now-playing card for a real (smaller) Player.
-  const [showMobileVideo, setShowMobileVideo] = useState(true);
+  const [showMobileVideo, setShowMobileVideo] = useState(false);
   // Presenter / fullscreen mode — triggered by the host for TV casting.
   // We fullscreen only the player-cluster (video + QR overlay + up-next
   // strip + marquee) instead of the whole document so the iframe never
@@ -472,6 +472,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           />
         )}
         <Marquee text={party.marquee} />
+        {showQR ? <QRCard code={party.code} /> : null}
         <AddSong
           code={party.code}
           onAdded={setParty}
@@ -503,7 +504,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onBan={isAdmin ? onBan : undefined}
           />
         </div>
-        {showQR ? <QRCard code={party.code} /> : null}
         {isAdmin && adminKey ? (
           <>
             <PartyHistory
