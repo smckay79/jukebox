@@ -80,7 +80,7 @@ fun PlayerScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        goldenSkip(baseUrl, code, adminKey)
+                        skipSong(baseUrl, code, adminKey)
                     }
                 },
                 modifier = Modifier
@@ -91,29 +91,29 @@ fun PlayerScreen(
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0x33FFD700),
-                    contentColor = Color(0xFFFFD700),
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    contentColor = Color.White.copy(alpha = 0.7f),
                 ),
             ) {
-                Text("✕ Skip", fontSize = 12.sp)
+                Text("Skip", fontSize = 12.sp)
             }
         }
     }
 }
 
-private suspend fun goldenSkip(baseUrl: String, code: String, adminKey: String) {
+private suspend fun skipSong(baseUrl: String, code: String, adminKey: String) {
     withContext(Dispatchers.IO) {
         try {
-            val upperCode = code.trim().uppercase()
-            val url = URL("$baseUrl/api/party/$upperCode/downvote")
+            val url = URL("$baseUrl/api/party/${code.trim().uppercase()}/admin")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 5_000
             conn.readTimeout = 5_000
             conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("x-admin-key", adminKey)
             conn.doOutput = true
             conn.outputStream.bufferedWriter().use {
-                it.write("""{"userId":"__android_host","adminKey":"$adminKey"}""")
+                it.write("""{"action":"skip"}""")
             }
             try { conn.responseCode } finally { conn.disconnect() }
         } catch (_: Exception) { }
