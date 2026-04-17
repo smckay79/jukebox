@@ -482,7 +482,28 @@ export async function downvoteNowPlaying(
       pushHistory(party, finalizePlayed(party.nowPlaying));
     }
     party.nowPlaying = null;
-    promoteNext(party, prevSource);
+
+    // Try to insert a global skip-bumper before advancing the queue.
+    // Only fires when the skipped song wasn't itself a bumper.
+    if (prevSource !== "bumper") {
+      try {
+        const { pickRandomSkipBumper } = await import("./skip-bumpers");
+        const pick = await pickRandomSkipBumper();
+        if (pick) {
+          const now = Date.now();
+          party.nowPlaying = makeBumperSong(
+            { videoId: pick.videoId, title: pick.title, thumbnail: pick.thumbnail },
+            now,
+          );
+        }
+      } catch {
+        /* skip-bumper lookup failed — fall through to normal queue */
+      }
+    }
+    if (!party.nowPlaying) {
+      promoteNext(party, prevSource);
+    }
+
     skipped = true;
     // Fire-and-forget: log to the system-wide flagged videos list.
     import("./flagged").then(({ recordCrowdSkip }) =>

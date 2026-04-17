@@ -73,7 +73,15 @@ interface AdminFlaggedVideo {
   dismissedAt?: number;
 }
 
-type Tab = "overview" | "parties" | "users" | "invites" | "flagged";
+interface AdminSkipBumper {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  addedAt: number;
+  enabled: boolean;
+}
+
+type Tab = "overview" | "parties" | "users" | "invites" | "flagged" | "bumpers";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -104,6 +112,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [flagged, setFlagged] = useState<AdminFlaggedVideo[]>([]);
+  const [skipBumpers, setSkipBumpers] = useState<AdminSkipBumper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +122,17 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Failed to load invites");
       const data = await res.json();
       setInvites(data.invites);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
+  const fetchSkipBumpers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/skip-bumpers");
+      if (!res.ok) throw new Error("Failed to load skip bumpers");
+      const data = await res.json();
+      setSkipBumpers(data.bumpers);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -164,10 +184,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchFlagged()]).finally(() =>
+    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchFlagged(), fetchSkipBumpers()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchStats, fetchParties, fetchUsers, fetchInvites, fetchFlagged]);
+  }, [fetchStats, fetchParties, fetchUsers, fetchInvites, fetchFlagged, fetchSkipBumpers]);
 
   async function endParty(code: string) {
     if (!confirm(`End party ${code}?`)) return;
@@ -215,7 +235,7 @@ export default function AdminDashboard() {
         <button
           onClick={() => {
             setLoading(true);
-            Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites()]).finally(
+            Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchFlagged(), fetchSkipBumpers()]).finally(
               () => setLoading(false),
             );
           }}
@@ -227,27 +247,29 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-white/5 p-1">
-        {(["overview", "parties", "users", "invites", "flagged"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
-              tab === t
-                ? "bg-brand-600 text-white"
-                : "text-white/60 hover:text-white"
-            }`}
-          >
-            {t === "overview"
-              ? "Overview"
-              : t === "parties"
-                ? `Parties (${parties.length})`
-                : t === "users"
-                  ? `Users (${users.length})`
-                  : t === "invites"
-                    ? `Invites (${invites.length})`
-                    : `Flagged (${flagged.length})`}
-          </button>
-        ))}
+        {(["overview", "parties", "users", "invites", "flagged", "bumpers"] as Tab[]).map((t) => {
+          const labels: Record<Tab, string> = {
+            overview: "Overview",
+            parties: `Parties (${parties.length})`,
+            users: `Users (${users.length})`,
+            invites: `Invites (${invites.length})`,
+            flagged: `Flagged (${flagged.length})`,
+            bumpers: `Bumpers (${skipBumpers.length})`,
+          };
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                tab === t
+                  ? "bg-brand-600 text-white"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              {labels[t]}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "overview" && stats && <OverviewTab stats={stats} />}
@@ -264,6 +286,9 @@ export default function AdminDashboard() {
       )}
       {tab === "flagged" && (
         <FlaggedTab videos={flagged} onUpdate={fetchFlagged} />
+      )}
+      {tab === "bumpers" && (
+        <SkipBumpersTab bumpers={skipBumpers} onUpdate={fetchSkipBumpers} />
       )}
     </main>
   );
@@ -977,6 +1002,227 @@ function FlaggedCard({
             Unban
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SkipBumpersTab({
+  bumpers,
+  onUpdate,
+}: {
+  bumpers: AdminSkipBumper[];
+  onUpdate: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  async function add() {
+    if (!url.trim()) return;
+    setBusy(true);
+    setAddError(null);
+    try {
+      const res = await fetch("/api/admin/skip-bumpers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "add", url: url.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAddError(data.error ?? "Failed to add bumper");
+        return;
+      }
+      setUrl("");
+      setAdding(false);
+      onUpdate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(videoId: string) {
+    if (!confirm("Remove this skip bumper?")) return;
+    setBusyId(videoId);
+    try {
+      await fetch("/api/admin/skip-bumpers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "remove", videoId }),
+      });
+      onUpdate();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function toggle(videoId: string, enabled: boolean) {
+    setBusyId(videoId);
+    try {
+      await fetch("/api/admin/skip-bumpers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "toggle", videoId, enabled }),
+      });
+      onUpdate();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const enabled = bumpers.filter((b) => b.enabled);
+  const disabled = bumpers.filter((b) => !b.enabled);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="mb-1 text-lg font-semibold">Skip Bumpers</h2>
+        <p className="mb-4 text-xs text-white/50">
+          When a song is crowd-skipped (3 downvotes), one of these videos plays
+          before the next song in queue. Add short clips, promos, or
+          intermission bumpers.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-white/60">
+          {enabled.length} active bumper{enabled.length !== 1 ? "s" : ""}
+        </span>
+        <button
+          onClick={() => { setAdding((v) => !v); setAddError(null); }}
+          className="btn-primary text-sm"
+        >
+          {adding ? "Cancel" : "Add bumper"}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="card space-y-3 p-4">
+          <div>
+            <label className="mb-1 block text-xs text-white/60">
+              YouTube URL or video ID
+            </label>
+            <input
+              type="text"
+              className="input w-full"
+              placeholder="https://youtube.com/watch?v=... or dQw4w9WgXcQ"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+            />
+          </div>
+          {addError && (
+            <p className="text-sm text-red-400">{addError}</p>
+          )}
+          <button
+            onClick={add}
+            disabled={busy || !url.trim()}
+            className="btn-primary w-full"
+          >
+            {busy ? "Adding..." : "Add skip bumper"}
+          </button>
+        </div>
+      )}
+
+      {bumpers.length === 0 && !adding ? (
+        <p className="text-sm text-white/40">
+          No skip bumpers configured. Add a YouTube video to play after
+          crowd-skipped songs.
+        </p>
+      ) : null}
+
+      {enabled.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-green-400">
+            Active ({enabled.length})
+          </h3>
+          <div className="space-y-2">
+            {enabled.map((b) => (
+              <SkipBumperCard
+                key={b.videoId}
+                bumper={b}
+                busyId={busyId}
+                onToggle={toggle}
+                onRemove={remove}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {disabled.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-white/40">
+            Disabled ({disabled.length})
+          </h3>
+          <div className="space-y-2">
+            {disabled.map((b) => (
+              <SkipBumperCard
+                key={b.videoId}
+                bumper={b}
+                busyId={busyId}
+                onToggle={toggle}
+                onRemove={remove}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkipBumperCard({
+  bumper,
+  busyId,
+  onToggle,
+  onRemove,
+}: {
+  bumper: AdminSkipBumper;
+  busyId: string | null;
+  onToggle: (videoId: string, enabled: boolean) => void;
+  onRemove: (videoId: string) => void;
+}) {
+  const isBusy = busyId === bumper.videoId;
+  return (
+    <div
+      className={`card flex items-center gap-3 p-3 ${!bumper.enabled ? "opacity-50" : ""}`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={bumper.thumbnail}
+        alt=""
+        className="h-12 w-20 flex-shrink-0 rounded object-cover"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{bumper.title}</p>
+        <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-white/50">
+          <span className="font-mono">{bumper.videoId}</span>
+          <span>Added {timeAgo(bumper.addedAt)}</span>
+          {bumper.enabled ? (
+            <span className="font-semibold text-green-400">ACTIVE</span>
+          ) : (
+            <span className="text-white/40">DISABLED</span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-shrink-0 gap-1">
+        <button
+          onClick={() => onToggle(bumper.videoId, !bumper.enabled)}
+          disabled={isBusy}
+          className="rounded bg-white/10 px-2 py-1 text-[10px] font-medium text-white/60 hover:bg-white/20"
+        >
+          {bumper.enabled ? "Disable" : "Enable"}
+        </button>
+        <button
+          onClick={() => onRemove(bumper.videoId)}
+          disabled={isBusy}
+          className="rounded bg-red-600/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-600"
+        >
+          Remove
+        </button>
       </div>
     </div>
   );
