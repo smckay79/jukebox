@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ThemePicker from "./ThemePicker";
 import type { PartyTheme } from "@/lib/types";
+
+interface MatchSearchResult {
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+}
 
 const COUNTRY_OPTIONS: Array<{ code: string; label: string }> = [
   { code: "", label: "Auto (from location)" },
@@ -78,6 +84,14 @@ export default function SettingsMenu({
   const [bumperErr, setBumperErr] = useState<string | null>(null);
   const [bumperFlash, setBumperFlash] = useState(false);
 
+  // Match search state
+  const [matchQuery, setMatchQuery] = useState("");
+  const [matchResults, setMatchResults] = useState<MatchSearchResult[]>([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchFocused, setMatchFocused] = useState(false);
+  const matchAbortRef = useRef<AbortController | null>(null);
+  const matchWrapRef = useRef<HTMLDivElement | null>(null);
+
   // Bumper list state
   const [bumpers, setBumpers] = useState<BumperEntry[]>([]);
   const [bumpersLoaded, setBumpersLoaded] = useState(false);
@@ -111,6 +125,55 @@ export default function SettingsMenu({
     });
     return () => { cancelled = true; };
   }, [open, onListBumpers]);
+
+  // Debounced YouTube search for the match keyword field
+  useEffect(() => {
+    const q = matchQuery.trim();
+    if (!q || bumperTrigger !== "match") {
+      matchAbortRef.current?.abort();
+      setMatchResults([]);
+      setMatchLoading(false);
+      return;
+    }
+    const t = setTimeout(async () => {
+      matchAbortRef.current?.abort();
+      const ctl = new AbortController();
+      matchAbortRef.current = ctl;
+      setMatchLoading(true);
+      try {
+        const qs = new URLSearchParams({ q });
+        if (country) qs.set("country", country);
+        const res = await fetch(`/api/search?${qs.toString()}`, {
+          signal: ctl.signal,
+        });
+        if (!res.ok) { setMatchResults([]); return; }
+        const data = await res.json();
+        setMatchResults(
+          (data.results ?? []).slice(0, 6).map((r: Record<string, string>) => ({
+            title: r.title,
+            channelTitle: r.channelTitle,
+            thumbnail: r.thumbnail,
+          })),
+        );
+      } catch {
+        setMatchResults([]);
+      } finally {
+        setMatchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [matchQuery, bumperTrigger, country]);
+
+  // Close match dropdown on outside click
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (matchWrapRef.current && !matchWrapRef.current.contains(e.target as Node)) {
+        setMatchFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
 
   async function saveCountry(next: string) {
     setCountryBusy(true);
@@ -155,6 +218,8 @@ export default function SettingsMenu({
     } else {
       setBumperUrl("");
       setBumperMatch("");
+      setMatchQuery("");
+      setMatchResults([]);
       setBumperTrigger("random");
       setBumperFlash(true);
       setTimeout(() => setBumperFlash(false), 1200);
@@ -335,12 +400,64 @@ export default function SettingsMenu({
                   </button>
                 </div>
                 {bumperTrigger === "match" ? (
-                  <input
-                    value={bumperMatch}
-                    onChange={(e) => setBumperMatch(e.target.value)}
-                    placeholder='e.g. "Drake" or "Taylor Swift"'
-                    className="input w-full text-sm"
-                  />
+                  <div ref={matchWrapRef} className="relative">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={matchQuery}
+                        onChange={(e) => {
+                          setMatchQuery(e.target.value);
+                          setBumperMatch(e.target.value);
+                        }}
+                        onFocus={() => setMatchFocused(true)}
+                        placeholder="Search for an artist or song..."
+                        className="input w-full text-sm"
+                        autoComplete="off"
+                      />
+                    </div>
+                    {bumperMatch && bumperMatch !== matchQuery ? (
+                      <p className="mt-1 text-[10px] text-brand-300">
+                        Matching: &quot;{bumperMatch}&quot;
+                      </p>
+                    ) : null}
+                    {matchFocused && (matchLoading || matchResults.length > 0) ? (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-lg border border-white/10 bg-[#0c0718]/95 p-1 shadow-xl backdrop-blur">
+                        {matchLoading ? (
+                          <p className="px-2 py-1 text-xs text-white/50">Searching...</p>
+                        ) : null}
+                        {matchResults.map((r, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md p-1.5 text-left hover:bg-white/10"
+                            onClick={() => {
+                              setBumperMatch(r.channelTitle);
+                              setMatchQuery(r.channelTitle);
+                              setMatchFocused(false);
+                              setMatchResults([]);
+                            }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={r.thumbnail}
+                              alt=""
+                              className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-white/90">
+                                {r.title}
+                              </p>
+                              <p className="truncate text-[10px] text-white/50">
+                                {r.channelTitle}
+                              </p>
+                            </div>
+                            <span className="flex-shrink-0 rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/60">
+                              Use &quot;{r.channelTitle}&quot;
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
                 <div className="flex items-center justify-between">
                   <div>
