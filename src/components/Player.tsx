@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import MiniQR from "./MiniQR";
 import type { Song } from "@/lib/types";
 
@@ -10,6 +10,9 @@ type YTPlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   destroy: () => void;
+  unMute: () => void;
+  isMuted: () => boolean;
+  getPlayerState: () => number;
 };
 
 type YTPlayerOptions = {
@@ -73,6 +76,7 @@ export default function Player({
   const currentVideoRef = useRef<string | null>(null);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
+  const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +99,7 @@ export default function Player({
         const mount = document.createElement("div");
         wrapRef.current.appendChild(mount);
 
+        setNeedsTap(false);
         playerRef.current = new window.YT.Player(mount, {
           videoId: song.videoId,
           width: "100%",
@@ -110,7 +115,19 @@ export default function Player({
             fs: 0,
           },
           events: {
+            onReady: (e) => {
+              e.target.playVideo();
+              // If autoplay was blocked by the browser, the state stays
+              // at -1 (unstarted) or 5 (cued). Show a tap-to-play overlay.
+              setTimeout(() => {
+                try {
+                  const st = e.target.getPlayerState();
+                  if (st === -1 || st === 5) setNeedsTap(true);
+                } catch { /* destroyed */ }
+              }, 800);
+            },
             onStateChange: (e) => {
+              if (e.data === 1) setNeedsTap(false);
               if (e.data === 0 && currentVideoRef.current) {
                 onEndedRef.current(currentVideoRef.current);
               }
@@ -155,6 +172,21 @@ export default function Player({
             Waiting for the first banger…
           </div>
         )}
+        {song && needsTap ? (
+          <button
+            type="button"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm"
+            onClick={() => {
+              playerRef.current?.playVideo();
+              setNeedsTap(false);
+            }}
+          >
+            <span className="text-4xl">▶</span>
+            <span className="text-sm font-medium text-white/80">
+              Tap to play
+            </span>
+          </button>
+        ) : null}
         {/* QR overlay so latecomers can scan straight off the TV. Pointer
             events disabled so it never steals clicks from the iframe. */}
         {song && partyCode ? (
