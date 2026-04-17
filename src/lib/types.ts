@@ -244,3 +244,24 @@ export interface SavedPlaylistSummary {
   count: number;
   updatedAt: number;
 }
+
+export interface InviteCode {
+  code: string;
+  createdAt: number;
+  createdBy: string; // userId of creator (admin or referrer)
+  createdByName: string;
+  // "admin" = created in admin panel, "referral" = user-generated invite
+  type: "admin" | "referral";
+  // How many times this code can be redeemed. -1 = unlimited.
+  maxUses: number;
+  uses: number;
+  // 3 months of Pro granted on redeem
+  grantDays: number;
+  // Optional: restrict to a specific email
+  recipientEmail?: string;
+  // Optional: personal message from the inviter
+  message?: string;
+  expiresAt?: number;
+  redeemedBy: { userId: string; email: string; redeemedAt: number }[];
+  revokedAt?: number;
+}

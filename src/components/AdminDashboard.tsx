@@ -46,7 +46,22 @@ interface AdminUser {
   };
 }
 
-type Tab = "overview" | "parties" | "users";
+interface AdminInvite {
+  code: string;
+  createdAt: number;
+  createdByName: string;
+  type: "admin" | "referral";
+  maxUses: number;
+  uses: number;
+  grantDays: number;
+  recipientEmail?: string;
+  message?: string;
+  expiresAt?: number;
+  redeemedBy: { userId: string; email: string; redeemedAt: number }[];
+  revokedAt?: number;
+}
+
+type Tab = "overview" | "parties" | "users" | "invites";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -75,8 +90,20 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [parties, setParties] = useState<AdminParty[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const fetchInvites = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/invites");
+      if (!res.ok) throw new Error("Failed to load invites");
+      const data = await res.json();
+      setInvites(data.invites);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -113,10 +140,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchStats(), fetchParties(), fetchUsers()]).finally(() =>
+    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchStats, fetchParties, fetchUsers]);
+  }, [fetchStats, fetchParties, fetchUsers, fetchInvites]);
 
   async function endParty(code: string) {
     if (!confirm(`End party ${code}?`)) return;
@@ -164,7 +191,7 @@ export default function AdminDashboard() {
         <button
           onClick={() => {
             setLoading(true);
-            Promise.all([fetchStats(), fetchParties(), fetchUsers()]).finally(
+            Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites()]).finally(
               () => setLoading(false),
             );
           }}
@@ -176,7 +203,7 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-white/5 p-1">
-        {(["overview", "parties", "users"] as Tab[]).map((t) => (
+        {(["overview", "parties", "users", "invites"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -190,7 +217,9 @@ export default function AdminDashboard() {
               ? "Overview"
               : t === "parties"
                 ? `Parties (${parties.length})`
-                : `Users (${users.length})`}
+                : t === "users"
+                  ? `Users (${users.length})`
+                  : `Invites (${invites.length})`}
           </button>
         ))}
       </div>
@@ -204,6 +233,9 @@ export default function AdminDashboard() {
         />
       )}
       {tab === "users" && <UsersTab users={users} onUpdate={fetchUsers} />}
+      {tab === "invites" && (
+        <InvitesTab invites={invites} onUpdate={fetchInvites} />
+      )}
     </main>
   );
 }
@@ -509,6 +541,239 @@ function UsersTab({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvitesTab({
+  invites,
+  onUpdate,
+}: {
+  invites: AdminInvite[];
+  onUpdate: () => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [maxUses, setMaxUses] = useState(1);
+  const [grantDays, setGrantDays] = useState(90);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function create() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/invites", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: email || undefined,
+          message: message || undefined,
+          maxUses,
+          grantDays,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const code = data.invite.code;
+        const emailNote = data.emailResult?.ok
+          ? ` — invite emailed to ${email}`
+          : email
+            ? ` — email failed, share the link manually`
+            : "";
+        setResult(`Created: ${code}${emailNote}`);
+        setEmail("");
+        setMessage("");
+        setCreating(false);
+        onUpdate();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(code: string) {
+    if (!confirm(`Revoke invite ${code}?`)) return;
+    await fetch("/api/admin/invites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "revoke", code }),
+    });
+    onUpdate();
+  }
+
+  const active = invites.filter((i) => !i.revokedAt);
+  const revoked = invites.filter((i) => !!i.revokedAt);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Invite Codes</h2>
+        <button
+          onClick={() => setCreating((v) => !v)}
+          className="btn-primary text-sm"
+        >
+          {creating ? "Cancel" : "Create invite"}
+        </button>
+      </div>
+
+      {result && (
+        <div className="rounded-lg bg-emerald-900/30 px-4 py-2 text-sm text-emerald-300">
+          {result}
+        </div>
+      )}
+
+      {creating && (
+        <div className="card space-y-3 p-4">
+          <div>
+            <label className="mb-1 block text-xs text-white/60">
+              Recipient email (optional — sends invite email)
+            </label>
+            <input
+              type="email"
+              className="input w-full"
+              placeholder="friend@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-white/60">
+              Personal message (optional)
+            </label>
+            <input
+              type="text"
+              className="input w-full"
+              placeholder="Hey! You should check this out..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-white/60">
+                Max uses
+              </label>
+              <input
+                type="number"
+                className="input w-full"
+                min={1}
+                value={maxUses}
+                onChange={(e) => setMaxUses(Number(e.target.value) || 1)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-white/60">
+                Grant days
+              </label>
+              <input
+                type="number"
+                className="input w-full"
+                min={1}
+                value={grantDays}
+                onChange={(e) => setGrantDays(Number(e.target.value) || 90)}
+              />
+            </div>
+          </div>
+          <button
+            onClick={create}
+            disabled={busy}
+            className="btn-primary w-full"
+          >
+            {busy ? "Creating..." : "Create & send invite"}
+          </button>
+        </div>
+      )}
+
+      {active.length === 0 && !creating ? (
+        <p className="text-sm text-white/40">No invites created yet</p>
+      ) : (
+        <div className="space-y-2">
+          {active.map((inv) => (
+            <div key={inv.code} className="card p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-brand-300">
+                      {inv.code}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        inv.type === "admin"
+                          ? "bg-yellow-600/30 text-yellow-200"
+                          : "bg-blue-600/30 text-blue-200"
+                      }`}
+                    >
+                      {inv.type}
+                    </span>
+                    <span className="text-xs text-white/40">
+                      {inv.uses}/{inv.maxUses === -1 ? "∞" : inv.maxUses} used
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-white/50">
+                    {inv.grantDays}d Pro · by {inv.createdByName} ·{" "}
+                    {timeAgo(inv.createdAt)}
+                    {inv.recipientEmail && ` · to ${inv.recipientEmail}`}
+                  </div>
+                  {inv.redeemedBy.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {inv.redeemedBy.map((r) => (
+                        <div
+                          key={r.userId}
+                          className="text-xs text-emerald-400"
+                        >
+                          Redeemed by {r.email} · {timeAgo(r.redeemedAt)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/invite/${inv.code}`,
+                      );
+                    }}
+                    className="rounded bg-white/10 px-2 py-1 text-[10px] font-medium text-white/60 hover:bg-white/20"
+                    title="Copy invite link"
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    onClick={() => revoke(inv.code)}
+                    className="rounded bg-red-600/80 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-600"
+                  >
+                    Revoke
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {revoked.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-white/50">
+            Revoked ({revoked.length})
+          </h3>
+          <div className="space-y-1">
+            {revoked.map((inv) => (
+              <div
+                key={inv.code}
+                className="card flex items-center gap-2 p-2 opacity-40"
+              >
+                <span className="font-mono text-xs">{inv.code}</span>
+                <span className="text-xs text-white/40">
+                  {inv.uses} used · revoked {timeAgo(inv.revokedAt!)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

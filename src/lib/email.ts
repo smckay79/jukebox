@@ -1,4 +1,4 @@
-import type { PartyRecap } from "./types";
+import type { InviteCode, PartyRecap } from "./types";
 import { formatDuration } from "./recap";
 
 // Thin wrapper around Resend's REST API (https://resend.com/docs). We
@@ -61,6 +61,108 @@ export async function sendRecapEmail(
     console.error("[email] resend threw", err);
     return { ok: false, reason: "network" };
   }
+}
+
+export async function sendInviteEmail(
+  to: string,
+  invite: InviteCode,
+  appUrl: string,
+): Promise<SendResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { ok: false, reason: "not-configured" };
+  if (!to || !/.+@.+\..+/.test(to)) return { ok: false, reason: "invalid-recipient" };
+
+  const from = process.env.RESEND_FROM || "Jukebox <onboarding@resend.dev>";
+  const inviteUrl = `${appUrl}/invite/${invite.code}`;
+  const subject = `${invite.createdByName} invited you to Jukebox Pro`;
+
+  const html = renderInviteHtml(invite, inviteUrl);
+  const text = renderInviteText(invite, inviteUrl);
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[email] invite send failed", res.status, body);
+      return { ok: false, reason: `resend-${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[email] invite send threw", err);
+    return { ok: false, reason: "network" };
+  }
+}
+
+function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
+  const months = Math.round(invite.grantDays / 30);
+  const messageHtml = invite.message
+    ? `<div style="margin:16px 0;padding:12px 16px;background:#f8f5ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;font-style:italic;color:#444">&ldquo;${esc(invite.message)}&rdquo;</div>`
+    : "";
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f3fa;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
+    <div style="max-width:520px;margin:0 auto;padding:32px 16px">
+      <div style="background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7e4ef;text-align:center">
+        <div style="background:linear-gradient(135deg,#7c3aed 0%,#ec4899 100%);padding:32px 24px;color:#fff">
+          <div style="font-size:36px;margin-bottom:8px">♪</div>
+          <h1 style="margin:0;font-size:24px;font-weight:700">You&rsquo;re invited!</h1>
+          <p style="margin:8px 0 0;font-size:15px;opacity:0.9">${esc(invite.createdByName)} wants you at the party</p>
+        </div>
+        <div style="padding:28px 24px">
+          ${messageHtml}
+          <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px">
+            You&rsquo;ve been personally invited to <strong>Jukebox</strong> &mdash; the live YouTube party playlist.
+            Claim your invite and get <strong>${months} months of Jukebox Pro</strong> free.
+          </p>
+          <div style="margin:24px 0">
+            <a href="${esc(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:#fff;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none">
+              Claim your invite
+            </a>
+          </div>
+          <div style="margin:20px 0;padding:12px;background:#faf8ff;border-radius:8px">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Your invite code</div>
+            <div style="font-family:monospace;font-size:24px;font-weight:700;letter-spacing:0.15em;color:#7c3aed">${esc(invite.code)}</div>
+          </div>
+          <p style="color:#999;font-size:12px;margin:16px 0 0">
+            ${invite.maxUses === 1 ? "This invite is just for you." : `This invite can be used ${invite.maxUses === -1 ? "unlimited times" : `up to ${invite.maxUses} times`}.`}
+            ${invite.expiresAt ? ` Expires ${new Date(invite.expiresAt).toLocaleDateString()}.` : ""}
+          </p>
+        </div>
+      </div>
+      <p style="color:#999;font-size:11px;text-align:center;margin:16px 0 0">
+        Jukebox &mdash; Your party&rsquo;s group playlist, live from YouTube.
+      </p>
+    </div>
+  </body>
+</html>`;
+}
+
+function renderInviteText(invite: InviteCode, inviteUrl: string): string {
+  const months = Math.round(invite.grantDays / 30);
+  const lines: string[] = [];
+  lines.push(`You're invited to Jukebox Pro!`);
+  lines.push(`${invite.createdByName} wants you at the party.`);
+  lines.push("");
+  if (invite.message) {
+    lines.push(`"${invite.message}"`);
+    lines.push("");
+  }
+  lines.push(
+    `Claim your invite and get ${months} months of Jukebox Pro free.`,
+  );
+  lines.push("");
+  lines.push(`Your invite code: ${invite.code}`);
+  lines.push(`Claim it here: ${inviteUrl}`);
+  return lines.join("\n");
 }
 
 // Tiny escape — just for the recap's user-entered fields (display names,
