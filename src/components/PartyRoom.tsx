@@ -519,7 +519,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           isAdmin={isAdmin}
           refreshKey={savedPlaylistsVersion}
         />
-        {playlistStatus}
+        {isAdmin ? playlistStatus : null}
         <div>
           <h2 className="mb-2 text-lg font-semibold">
             Up next{" "}
@@ -580,7 +580,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             authUser={authUser}
             isAdmin={isAdmin}
           />
-          {playlistStatus}
+          {isAdmin ? playlistStatus : null}
           <div
             ref={presenterRef}
             className={
