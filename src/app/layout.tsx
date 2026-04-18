@@ -5,6 +5,15 @@ export const metadata: Metadata = {
   title: "Jukebox — queue up YouTube with your friends",
   description:
     "Create a party, share a QR code, and let your friends queue and upvote YouTube music videos in real time.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Jukebox",
+  },
+  icons: {
+    apple: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {

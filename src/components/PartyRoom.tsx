@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AddSong from "./AddSong";
+import AddToHomeScreen from "./AddToHomeScreen";
 import AdminStats from "./AdminStats";
 import Background from "./Background";
 import BannedList from "./BannedList";
@@ -467,6 +468,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           >
             📺 TV Mode
           </button>
+          <AddToHomeScreen />
           <button
             className="btn-ghost text-sm"
             onClick={() => setShowQR((v) => !v)}
