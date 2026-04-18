@@ -24,7 +24,7 @@ struct CodeEntryScreen: View {
                 VStack(spacing: 8) {
                     Image(systemName: "music.note.tv")
                         .font(.system(size: 60))
-                        .foregroundColor(Color("Primary"))
+                        .foregroundColor(Color("BrandPrimary"))
                     Text("Jukebox Player")
                         .font(.largeTitle)
                         .fontWeight(.bold)
@@ -95,7 +95,7 @@ struct CodeEntryScreen: View {
                             .padding(.vertical, 16)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color("Primary"))
+                    .tint(Color("BrandPrimary"))
                     .disabled(!isValid)
                     .focused($focusedField, equals: .connect)
                 }
@@ -120,7 +120,7 @@ struct CodeEntryScreen: View {
                                             Text(party.code)
                                                 .font(.caption)
                                                 .fontWeight(.bold)
-                                                .foregroundColor(Color("Primary"))
+                                                .foregroundColor(Color("BrandPrimary"))
                                             if party.adminKey != nil {
                                                 Text("Admin")
                                                     .font(.caption2)
@@ -139,7 +139,7 @@ struct CodeEntryScreen: View {
                                     Spacer()
                                     Text("Rejoin")
                                         .font(.caption)
-                                        .foregroundColor(Color("Primary"))
+                                        .foregroundColor(Color("BrandPrimary"))
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)

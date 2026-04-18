@@ -14,6 +14,7 @@
 		A10000010000000000000005 /* CodeEntryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000005; };
 		A10000010000000000000006 /* PlayerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000006; };
 		A10000010000000000000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000007; };
+		A10000010000000000000008 /* PartyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000009; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
 		A10000020000000000000006 /* PlayerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerScreen.swift; sourceTree = "<group>"; };
 		A10000020000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000020000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000020000000000000009 /* PartyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartyState.swift; sourceTree = "<group>"; };
 		A10000030000000000000001 /* JukeboxPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JukeboxPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,6 +57,7 @@
 			children = (
 				A10000020000000000000003 /* PartyCodeStore.swift */,
 				A10000020000000000000004 /* APIClient.swift */,
+				A10000020000000000000009 /* PartyState.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -139,6 +142,7 @@
 				A10000010000000000000004 /* APIClient.swift in Sources */,
 				A10000010000000000000005 /* CodeEntryScreen.swift in Sources */,
 				A10000010000000000000006 /* PlayerScreen.swift in Sources */,
+				A10000010000000000000008 /* PartyState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -207,7 +211,7 @@
 		A1000009000000000000000A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -229,7 +233,7 @@
 		A1000009000000000000000B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
