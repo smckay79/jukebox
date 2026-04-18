@@ -17,6 +17,7 @@ import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
 import SubscriptionBanner from "./SubscriptionBanner";
+import TVMode from "./TVMode";
 import UserMenu from "./UserMenu";
 import { getAdminKey, getAdminPin, getUserId } from "@/lib/identity";
 import type {
@@ -50,6 +51,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // and don't want to burn mobile data on an iframe. When toggled on we
   // swap the compact now-playing card for a real (smaller) Player.
   const [showMobileVideo, setShowMobileVideo] = useState(false);
+  const [showTVMode, setShowTVMode] = useState(false);
   // Presenter / fullscreen mode — triggered by the host for TV casting.
   // We fullscreen only the player-cluster (video + QR overlay + up-next
   // strip + marquee) instead of the whole document so the iframe never
@@ -418,6 +420,19 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   return (
     <>
       <Background theme={party.theme} />
+      {showTVMode ? (
+        <TVMode
+          party={party}
+          userId={userId}
+          isAdmin={isAdmin}
+          isPro={isPro}
+          onEnded={onEnded}
+          onSkip={onSkip}
+          onDownvote={isPro ? onDownvote : undefined}
+          onGoldenDownvote={isAdmin ? onGoldenDownvote : undefined}
+          onExit={() => setShowTVMode(false)}
+        />
+      ) : null}
       <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-6">
         <div className="min-w-0">
@@ -445,6 +460,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onClick={() => setShowMobileVideo((v) => !v)}
           >
             {showMobileVideo ? "Hide video" : "Show video"}
+          </button>
+          <button
+            className="btn-ghost text-sm"
+            onClick={() => setShowTVMode(true)}
+          >
+            📺 TV Mode
           </button>
           <button
             className="btn-ghost text-sm"
