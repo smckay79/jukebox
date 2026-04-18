@@ -44,6 +44,27 @@ enum APIClient {
         return nil
     }
 
+    static func fetchVideoURL(baseURL: String, code: String, videoId: String) async -> (url: String, type: String)? {
+        let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
+        guard let url = URL(string: "\(baseURL)/api/party/\(normalized)/video-url?v=\(videoId)") else {
+            return nil
+        }
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                return nil
+            }
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let streamURL = json["url"] as? String,
+               let type = json["type"] as? String {
+                return (streamURL, type)
+            }
+        } catch { }
+        return nil
+    }
+
     static func skipSong(baseURL: String, code: String, adminKey: String) async {
         let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "\(baseURL)/api/party/\(normalized)/admin") else { return }

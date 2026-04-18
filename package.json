@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@upstash/redis": "^1.37.0",
     "ioredis": "^5.10.1",
     "next": "14.2.15",

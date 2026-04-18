@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 struct PlayerScreen: View {
     let code: String
@@ -7,13 +8,13 @@ struct PlayerScreen: View {
     let onExit: () -> Void
 
     @StateObject private var party = PartyState()
+    @StateObject private var videoPlayer = VideoPlayerState()
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             if let endedAt = party.endedAt, endedAt > 0 {
-                // Party ended card
                 VStack(spacing: 8) {
                     Text("Party ended")
                         .font(.caption)
@@ -27,15 +28,12 @@ struct PlayerScreen: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    // Up-next strip
                     upNextStrip
                         .frame(height: 56)
 
-                    // Now playing area
                     nowPlayingArea
                         .frame(maxHeight: .infinity)
 
-                    // Marquee
                     if let marquee = party.marquee, !marquee.isEmpty {
                         MarqueeText(text: marquee)
                             .frame(height: 36)
@@ -43,7 +41,6 @@ struct PlayerScreen: View {
                 }
             }
 
-            // Admin skip button
             if adminKey != nil {
                 VStack {
                     Spacer()
@@ -76,6 +73,14 @@ struct PlayerScreen: View {
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             party.disconnect()
+            videoPlayer.stop()
+        }
+        .onChange(of: party.nowPlaying?.videoId) { _, newVideoId in
+            if let videoId = newVideoId {
+                videoPlayer.loadVideo(baseURL: baseURL, code: code, videoId: videoId)
+            } else {
+                videoPlayer.stop()
+            }
         }
         .onExitCommand { onExit() }
     }
@@ -120,75 +125,104 @@ struct PlayerScreen: View {
         Group {
             if let song = party.nowPlaying {
                 ZStack {
-                    // Background thumbnail (blurred)
-                    AsyncImage(url: URL(string: song.thumbnail)) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.black
-                    }
-                    .blur(radius: 40)
-                    .opacity(0.4)
-                    .clipped()
-
-                    // Song info
-                    VStack(spacing: 20) {
-                        Spacer()
-
-                        // Thumbnail
+                    if videoPlayer.isPlaying {
+                        VideoPlayer(player: videoPlayer.player)
+                            .ignoresSafeArea()
+                    } else {
                         AsyncImage(url: URL(string: song.thumbnail)) { image in
-                            image.resizable().aspectRatio(contentMode: .fit)
+                            image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.1))
+                            Color.black
                         }
-                        .frame(maxWidth: 640, maxHeight: 360)
-                        .cornerRadius(12)
-                        .shadow(radius: 20)
+                        .blur(radius: 40)
+                        .opacity(0.4)
+                        .clipped()
+                    }
 
-                        // Title + added by
-                        VStack(spacing: 6) {
-                            Text(song.title)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                            Text("Added by \(song.addedBy)")
-                                .font(.callout)
-                                .foregroundColor(.white.opacity(0.6))
+                    if !videoPlayer.isPlaying {
+                        VStack(spacing: 20) {
+                            Spacer()
+
+                            AsyncImage(url: URL(string: song.thumbnail)) { image in
+                                image.resizable().aspectRatio(contentMode: .fit)
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                            }
+                            .frame(maxWidth: 640, maxHeight: 360)
+                            .cornerRadius(12)
+                            .shadow(radius: 20)
+
+                            VStack(spacing: 6) {
+                                Text(song.title)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                Text("Added by \(song.addedBy)")
+                                    .font(.callout)
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+
+                            if videoPlayer.isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+
+                            Spacer()
                         }
+                        .padding(.horizontal, 40)
+                    }
 
-                        // Downvote indicators
-                        if song.goldenSkip == true {
-                            Text("GOLDEN DOWNVOTE")
-                                .font(.title3)
-                                .fontWeight(.black)
-                                .tracking(3)
-                                .foregroundColor(Color.yellow)
-                                .shadow(color: .yellow.opacity(0.6), radius: 20)
-                        } else if let downvotes = song.downvotes, !downvotes.isEmpty {
-                            HStack(spacing: 8) {
-                                ForEach(0..<min(downvotes.count, 3), id: \.self) { _ in
-                                    Text("X")
-                                        .font(.title)
-                                        .fontWeight(.black)
-                                        .foregroundColor(.red)
-                                        .frame(width: 40, height: 40)
-                                        .background(Color.red.opacity(0.2))
-                                        .cornerRadius(8)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.red, lineWidth: 2)
-                                        )
+                    if videoPlayer.isPlaying {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(song.title)
+                                        .font(.callout)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                    Text("Added by \(song.addedBy)")
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.6))
                                 }
+                                .padding(12)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(10)
+                                Spacer()
+                            }
+                            .padding(.leading, 24)
+                            .padding(.bottom, 60)
+                        }
+                    }
+
+                    if song.goldenSkip == true {
+                        Text("GOLDEN DOWNVOTE")
+                            .font(.title3)
+                            .fontWeight(.black)
+                            .tracking(3)
+                            .foregroundColor(Color.yellow)
+                            .shadow(color: .yellow.opacity(0.6), radius: 20)
+                    } else if let downvotes = song.downvotes, !downvotes.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(0..<min(downvotes.count, 3), id: \.self) { _ in
+                                Text("X")
+                                    .font(.title)
+                                    .fontWeight(.black)
+                                    .foregroundColor(.red)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color.red.opacity(0.2))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.red, lineWidth: 2)
+                                    )
                             }
                         }
-
-                        Spacer()
                     }
-                    .padding(.horizontal, 40)
 
-                    // QR code bottom-right
                     VStack {
                         Spacer()
                         HStack {
@@ -221,7 +255,49 @@ struct PlayerScreen: View {
     }
 }
 
-// QR code using CoreImage
+@MainActor
+class VideoPlayerState: ObservableObject {
+    @Published var player: AVPlayer?
+    @Published var isPlaying = false
+    @Published var isLoading = false
+
+    private var currentVideoId: String?
+    private var loadTask: Task<Void, Never>?
+
+    func loadVideo(baseURL: String, code: String, videoId: String) {
+        guard videoId != currentVideoId else { return }
+        currentVideoId = videoId
+        stop()
+        isLoading = true
+
+        loadTask = Task {
+            let result = await APIClient.fetchVideoURL(baseURL: baseURL, code: code, videoId: videoId)
+            guard !Task.isCancelled, currentVideoId == videoId else { return }
+
+            guard let result, let url = URL(string: result.url) else {
+                isLoading = false
+                return
+            }
+
+            let avPlayer = AVPlayer(url: url)
+            avPlayer.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            player = avPlayer
+            isPlaying = true
+            isLoading = false
+            avPlayer.play()
+        }
+    }
+
+    func stop() {
+        loadTask?.cancel()
+        loadTask = nil
+        player?.pause()
+        player = nil
+        isPlaying = false
+        isLoading = false
+    }
+}
+
 struct QRCodeView: View {
     let code: String
 
@@ -248,7 +324,6 @@ struct QRCodeView: View {
     }
 }
 
-// Simple scrolling marquee
 struct MarqueeText: View {
     let text: String
     @State private var offset: CGFloat = 0
