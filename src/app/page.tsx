@@ -189,6 +189,56 @@ export default async function Home() {
         </div>
       </section>
 
+      <section className="mt-16">
+        <h2 className="mb-6 text-center text-2xl font-bold">
+          Play on any screen
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="card flex flex-col items-center gap-3 p-6 text-center">
+            <span className="text-3xl">📺</span>
+            <div>
+              <p className="font-semibold">Android TV &amp; Fire TV</p>
+              <p className="mt-1 text-xs text-white/50">
+                Sideload the native Jukebox Player app on Fire TV Stick, Chromecast, or any Android TV device.
+              </p>
+            </div>
+            <Link
+              href="/download"
+              className="mt-auto rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium hover:bg-brand-500"
+            >
+              Get the TV app
+            </Link>
+          </div>
+          <div className="card flex flex-col items-center gap-3 p-6 text-center">
+            <span className="text-3xl">🍎</span>
+            <div>
+              <p className="font-semibold">iPhone &amp; iPad</p>
+              <p className="mt-1 text-xs text-white/50">
+                Add Jukebox to your Home Screen for a full-screen app experience — no App Store needed.
+              </p>
+            </div>
+            <Link
+              href="/download#ios"
+              className="mt-auto rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20"
+            >
+              Install instructions
+            </Link>
+          </div>
+          <div className="card flex flex-col items-center gap-3 p-6 text-center">
+            <span className="text-3xl">🖥️</span>
+            <div>
+              <p className="font-semibold">Desktop &amp; Laptop</p>
+              <p className="mt-1 text-xs text-white/50">
+                Use TV Mode to fullscreen the player and AirPlay or cast it to any screen.
+              </p>
+            </div>
+            <span className="mt-auto rounded-lg bg-white/5 px-4 py-2 text-sm font-medium text-white/40">
+              Just open jukebox in your browser
+            </span>
+          </div>
+        </div>
+      </section>
+
       <footer className="mt-16 text-center text-sm text-white/40">
         <p>v1 · real-time push &amp; sign-in coming soon. Have fun out there.</p>
       </footer>
