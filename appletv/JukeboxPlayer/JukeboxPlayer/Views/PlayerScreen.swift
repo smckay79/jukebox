@@ -40,45 +40,57 @@ struct PlayerScreen: View {
                 }
             }
 
-            // QR code — always visible bottom-right
+            // QR code + label — bottom-right
             if party.nowPlaying != nil || party.endedAt == nil {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
-                        QRCodeView(code: code)
-                            .frame(width: 120, height: 120)
-                            .padding(6)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(12)
-                            .padding(.trailing, 20)
-                            .padding(.bottom, adminKey != nil ? 56 : 16)
+                        HStack(spacing: 12) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Join")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white.opacity(0.8))
+                                Text(code)
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Color("BrandPrimary"))
+                            }
+                            QRCodeView(code: code)
+                                .frame(width: 100, height: 100)
+                        }
+                        .padding(10)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(12)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 16)
                     }
                 }
                 .zIndex(15)
             }
 
+            // Admin skip — bottom-left, small
             if adminKey != nil {
                 VStack {
                     Spacer()
                     HStack {
-                        Spacer()
                         Button(action: {
                             guard let adminKey else { return }
                             Task { await APIClient.skipSong(baseURL: baseURL, code: code, adminKey: adminKey) }
                         }) {
                             Text("Skip")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white.opacity(0.7))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.12))
-                                .cornerRadius(8)
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.5))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
-                        .padding(.trailing, 24)
+                        .padding(.leading, 20)
                         .padding(.bottom, 16)
+                        Spacer()
                     }
                 }
                 .zIndex(20)
