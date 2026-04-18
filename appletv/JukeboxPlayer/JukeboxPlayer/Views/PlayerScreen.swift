@@ -75,14 +75,18 @@ struct PlayerScreen: View {
             party.disconnect()
             videoPlayer.stop()
         }
-        .onChange(of: party.nowPlaying?.videoId) { _, newVideoId in
-            if let videoId = newVideoId {
-                videoPlayer.loadVideo(baseURL: baseURL, code: code, videoId: videoId)
-            } else {
-                videoPlayer.stop()
-            }
+        .onReceive(party.$nowPlaying) { song in
+            handleVideoChange(videoId: song?.videoId)
         }
         .onExitCommand { onExit() }
+    }
+
+    private func handleVideoChange(videoId: String?) {
+        if let videoId {
+            videoPlayer.loadVideo(baseURL: baseURL, code: code, videoId: videoId)
+        } else {
+            videoPlayer.stop()
+        }
     }
 
     private var upNextStrip: some View {
@@ -166,8 +170,19 @@ struct PlayerScreen: View {
                             }
 
                             if videoPlayer.isLoading {
-                                ProgressView()
-                                    .tint(.white)
+                                VStack(spacing: 8) {
+                                    ProgressView()
+                                        .tint(.white)
+                                    Text("Loading video…")
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                            } else if let error = videoPlayer.errorMessage {
+                                Text(error)
+                                    .font(.caption2)
+                                    .foregroundColor(.red.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
                             }
 
                             Spacer()
@@ -260,6 +275,7 @@ class VideoPlayerState: ObservableObject {
     @Published var player: AVPlayer?
     @Published var isPlaying = false
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     private var currentVideoId: String?
     private var loadTask: Task<Void, Never>?
@@ -267,23 +283,34 @@ class VideoPlayerState: ObservableObject {
     func loadVideo(baseURL: String, code: String, videoId: String) {
         guard videoId != currentVideoId else { return }
         currentVideoId = videoId
-        stop()
+        loadTask?.cancel()
+        player?.pause()
+        player = nil
+        isPlaying = false
         isLoading = true
+        errorMessage = nil
 
         loadTask = Task {
             let result = await APIClient.fetchVideoURL(baseURL: baseURL, code: code, videoId: videoId)
             guard !Task.isCancelled, currentVideoId == videoId else { return }
 
-            guard let result, let url = URL(string: result.url) else {
+            guard let result else {
                 isLoading = false
+                errorMessage = "Could not load video stream"
+                return
+            }
+
+            guard let url = URL(string: result.url) else {
+                isLoading = false
+                errorMessage = "Invalid stream URL"
                 return
             }
 
             let avPlayer = AVPlayer(url: url)
-            avPlayer.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
             player = avPlayer
             isPlaying = true
             isLoading = false
+            errorMessage = nil
             avPlayer.play()
         }
     }
@@ -295,6 +322,8 @@ class VideoPlayerState: ObservableObject {
         player = nil
         isPlaying = false
         isLoading = false
+        errorMessage = nil
+        currentVideoId = nil
     }
 }
 

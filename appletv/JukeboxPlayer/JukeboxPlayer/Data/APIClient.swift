@@ -47,21 +47,35 @@ enum APIClient {
     static func fetchVideoURL(baseURL: String, code: String, videoId: String) async -> (url: String, type: String)? {
         let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "\(baseURL)/api/party/\(normalized)/video-url?v=\(videoId)") else {
+            print("[VideoURL] Invalid URL for \(videoId)")
             return nil
         }
         do {
             var request = URLRequest(url: url)
-            request.timeoutInterval = 15
+            request.timeoutInterval = 30
+            print("[VideoURL] Fetching stream for \(videoId)...")
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            guard let http = response as? HTTPURLResponse else {
+                print("[VideoURL] No HTTP response")
+                return nil
+            }
+            print("[VideoURL] Status: \(http.statusCode)")
+            guard http.statusCode == 200 else {
+                if let body = String(data: data, encoding: .utf8) {
+                    print("[VideoURL] Error body: \(body)")
+                }
                 return nil
             }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let streamURL = json["url"] as? String,
                let type = json["type"] as? String {
+                print("[VideoURL] Got \(type) URL (\(streamURL.prefix(80))...)")
                 return (streamURL, type)
             }
-        } catch { }
+            print("[VideoURL] Could not parse response")
+        } catch {
+            print("[VideoURL] Error: \(error.localizedDescription)")
+        }
         return nil
     }
 
