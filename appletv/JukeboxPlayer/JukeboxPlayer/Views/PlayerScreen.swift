@@ -30,14 +30,13 @@ struct PlayerScreen: View {
                 VStack(spacing: 0) {
                     upNextStrip
                         .frame(height: 56)
+                        .zIndex(10)
 
                     nowPlayingArea
                         .frame(maxHeight: .infinity)
 
-                    if let marquee = party.marquee, !marquee.isEmpty {
-                        MarqueeText(text: marquee)
-                            .frame(height: 36)
-                    }
+                    bottomBar
+                        .zIndex(10)
                 }
             }
 
@@ -61,9 +60,10 @@ struct PlayerScreen: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 24)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 52)
                     }
                 }
+                .zIndex(20)
             }
         }
         .onAppear {
@@ -87,6 +87,25 @@ struct PlayerScreen: View {
         } else {
             videoPlayer.stop()
         }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            if let marquee = party.marquee, !marquee.isEmpty {
+                MarqueeText(text: marquee)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+            } else {
+                Spacer()
+            }
+
+            QRCodeView(code: code)
+                .frame(width: 100, height: 100)
+                .padding(8)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(10)
+        }
+        .background(Color.black.opacity(0.6))
     }
 
     private var upNextStrip: some View {
@@ -129,9 +148,8 @@ struct PlayerScreen: View {
         Group {
             if let song = party.nowPlaying {
                 ZStack {
-                    if videoPlayer.isPlaying {
-                        VideoPlayer(player: videoPlayer.player)
-                            .ignoresSafeArea()
+                    if videoPlayer.isPlaying, let player = videoPlayer.player {
+                        AVPlayerLayerView(player: player)
                     } else {
                         AsyncImage(url: URL(string: song.thumbnail)) { image in
                             image.resizable().aspectRatio(contentMode: .fill)
@@ -209,7 +227,7 @@ struct PlayerScreen: View {
                                 Spacer()
                             }
                             .padding(.leading, 24)
-                            .padding(.bottom, 60)
+                            .padding(.bottom, 16)
                         }
                     }
 
@@ -237,16 +255,6 @@ struct PlayerScreen: View {
                             }
                         }
                     }
-
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            QRCodeView(code: code)
-                                .frame(width: 120, height: 120)
-                                .padding(16)
-                        }
-                    }
                 }
             } else {
                 VStack(spacing: 12) {
@@ -266,6 +274,33 @@ struct PlayerScreen: View {
                         .foregroundColor(.white.opacity(0.5))
                 }
             }
+        }
+    }
+}
+
+struct AVPlayerLayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> UIView {
+        let view = PlayerUIView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .black
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let view = uiView as? PlayerUIView {
+            view.playerLayer.player = player
+        }
+    }
+
+    private class PlayerUIView: UIView {
+        var playerLayer: AVPlayerLayer {
+            layer as! AVPlayerLayer
+        }
+        override class var layerClass: AnyClass {
+            AVPlayerLayer.self
         }
     }
 }
@@ -420,7 +455,6 @@ struct MarqueeText: View {
                 }
             }
         }
-        .background(Color.black.opacity(0.6))
     }
 
     private func startScrolling() {
