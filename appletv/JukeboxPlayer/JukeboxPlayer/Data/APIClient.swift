@@ -77,21 +77,33 @@ enum APIClient {
                 return nil
             }
 
+            // Prefer highest quality combined (video+audio) MP4 from formatStreams
+            // itag 22 = 720p, itag 18 = 360p
             if let formats = json["formatStreams"] as? [[String: Any]] {
-                let mp4 = formats.filter { ($0["container"] as? String) == "mp4" }
-                if let best = mp4.last, let itag = best["itag"] as? String {
-                    let proxyUrl = "\(instance)/latest_version?id=\(videoId)&itag=\(itag)"
+                let mp4 = formats
+                    .filter { ($0["container"] as? String) == "mp4" }
+                    .sorted { resolution($0) > resolution($1) }
+                if let best = mp4.first, let itag = best["itag"] as? String {
                     let quality = best["qualityLabel"] as? String ?? "unknown"
-                    print("[VideoURL] Got \(quality) via \(instance) (itag \(itag))")
+                    let proxyUrl = "\(instance)/latest_version?id=\(videoId)&itag=\(itag)"
+                    print("[VideoURL] Got \(quality) combined via \(instance) (itag \(itag))")
                     return (proxyUrl, "mp4")
                 }
             }
 
-            print("[VideoURL] \(instance) had no usable MP4 streams")
+            print("[VideoURL] \(instance) had no usable streams")
         } catch {
             print("[VideoURL] \(instance) error: \(error.localizedDescription)")
         }
         return nil
+    }
+
+    private static func resolution(_ format: [String: Any]) -> Int {
+        if let label = format["qualityLabel"] as? String {
+            return Int(label.replacingOccurrences(of: "p", with: "")
+                .components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "") ?? 0
+        }
+        return 0
     }
 
     static func skipSong(baseURL: String, code: String, adminKey: String) async {

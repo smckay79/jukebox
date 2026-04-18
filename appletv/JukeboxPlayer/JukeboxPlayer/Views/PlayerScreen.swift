@@ -70,7 +70,7 @@ struct PlayerScreen: View {
                 .zIndex(15)
             }
 
-            // Admin skip — bottom-left, small
+            // Admin skip — bottom-left
             if adminKey != nil {
                 VStack {
                     Spacer()
@@ -79,15 +79,20 @@ struct PlayerScreen: View {
                             guard let adminKey else { return }
                             Task { await APIClient.skipSong(baseURL: baseURL, code: code, adminKey: adminKey) }
                         }) {
-                            Text("Skip")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.5))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(6)
+                            HStack(spacing: 6) {
+                                Image(systemName: "forward.fill")
+                                    .font(.caption2)
+                                Text("Skip")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                         }
                         .buttonStyle(.plain)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(12)
                         .padding(.leading, 20)
                         .padding(.bottom, 16)
                         Spacer()
@@ -363,7 +368,9 @@ class VideoPlayerState: ObservableObject {
 
             print("[Video] Playing \(result.type) from: \(url.absoluteString.prefix(100))")
             let item = AVPlayerItem(url: url)
+            item.preferredForwardBufferDuration = 5
             let avPlayer = AVPlayer(playerItem: item)
+            avPlayer.automaticallyWaitsToMinimizeStalling = false
 
             statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
                 Task { @MainActor in
