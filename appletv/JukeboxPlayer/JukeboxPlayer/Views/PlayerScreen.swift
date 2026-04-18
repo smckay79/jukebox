@@ -159,7 +159,7 @@ struct PlayerScreen: View {
                         }
 
                         // Downvote indicators
-                        if song.goldenSkip {
+                        if song.goldenSkip == true {
                             Text("GOLDEN DOWNVOTE")
                                 .font(.title3)
                                 .fontWeight(.black)

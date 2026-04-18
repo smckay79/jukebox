@@ -47,7 +47,7 @@ struct CodeEntryScreen: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.characters)
                             .focused($focusedField, equals: .code)
-                            .onChange(of: code) { newValue in
+                            .onChange(of: code) { _, newValue in
                                 let filtered = newValue
                                     .uppercased()
                                     .filter { $0.isLetter || $0.isNumber }
@@ -72,7 +72,7 @@ struct CodeEntryScreen: View {
                             .multilineTextAlignment(.center)
                             .keyboardType(.numberPad)
                             .focused($focusedField, equals: .pin)
-                            .onChange(of: pin) { newValue in
+                            .onChange(of: pin) { _, newValue in
                                 let filtered = newValue.filter { $0.isNumber }
                                 pin = String(filtered.prefix(4))
                             }
