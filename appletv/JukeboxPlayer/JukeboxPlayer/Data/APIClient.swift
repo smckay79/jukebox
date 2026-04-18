@@ -1,9 +1,9 @@
 import Foundation
 
 enum APIClient {
-    private static let pipedInstances = [
-        "https://api.piped.private.coffee",
-        "https://pipedapi.darkness.services",
+    private static let invidiousInstances = [
+        "https://invidious.darkness.services",
+        "https://invidious.private.coffee",
     ]
 
     static func fetchPartyName(baseURL: String, code: String) async -> String {
@@ -50,8 +50,8 @@ enum APIClient {
     }
 
     static func fetchVideoURL(videoId: String) async -> (url: String, type: String)? {
-        for instance in pipedInstances {
-            if let result = await fetchFromPiped(videoId: videoId, instance: instance) {
+        for instance in invidiousInstances {
+            if let result = await fetchFromInvidious(videoId: videoId, instance: instance) {
                 return result
             }
         }
@@ -59,8 +59,10 @@ enum APIClient {
         return nil
     }
 
-    private static func fetchFromPiped(videoId: String, instance: String) async -> (url: String, type: String)? {
-        guard let url = URL(string: "\(instance)/streams/\(videoId)") else { return nil }
+    private static func fetchFromInvidious(videoId: String, instance: String) async -> (url: String, type: String)? {
+        guard let url = URL(string: "\(instance)/api/v1/videos/\(videoId)?fields=formatStreams,adaptiveFormats") else {
+            return nil
+        }
         do {
             var request = URLRequest(url: url)
             request.timeoutInterval = 15
@@ -75,38 +77,21 @@ enum APIClient {
                 return nil
             }
 
-            if let hls = json["hls"] as? String, !hls.isEmpty {
-                print("[VideoURL] Got HLS from \(instance)")
-                return (hls, "hls")
-            }
-
-            if let streams = json["videoStreams"] as? [[String: Any]] {
-                let combined = streams.filter { !($0["videoOnly"] as? Bool ?? true) }
-                let mp4 = combined.filter {
-                    ($0["format"] as? String) == "MPEG_4" ||
-                    (($0["mimeType"] as? String) ?? "").contains("video/mp4")
-                }
-                let best = (mp4.isEmpty ? combined : mp4)
-                    .sorted { (parseInt($0["quality"]) ?? 0) > (parseInt($1["quality"]) ?? 0) }
-                if let first = best.first, let streamUrl = first["url"] as? String {
-                    let quality = first["quality"] as? String ?? "unknown"
-                    print("[VideoURL] Got \(quality) stream from \(instance)")
-                    return (streamUrl, "mp4")
+            if let formats = json["formatStreams"] as? [[String: Any]] {
+                let mp4 = formats.filter { ($0["container"] as? String) == "mp4" }
+                if let best = mp4.last, let itag = best["itag"] as? String {
+                    let proxyUrl = "\(instance)/latest_version?id=\(videoId)&itag=\(itag)"
+                    let quality = best["qualityLabel"] as? String ?? "unknown"
+                    print("[VideoURL] Got \(quality) via \(instance) (itag \(itag))")
+                    return (proxyUrl, "mp4")
                 }
             }
 
-            print("[VideoURL] \(instance) had no usable streams")
+            print("[VideoURL] \(instance) had no usable MP4 streams")
         } catch {
             print("[VideoURL] \(instance) error: \(error.localizedDescription)")
         }
         return nil
-    }
-
-    private static func parseInt(_ value: Any?) -> Int? {
-        if let str = value as? String {
-            return Int(str.replacingOccurrences(of: "p", with: ""))
-        }
-        return value as? Int
     }
 
     static func skipSong(baseURL: String, code: String, adminKey: String) async {
