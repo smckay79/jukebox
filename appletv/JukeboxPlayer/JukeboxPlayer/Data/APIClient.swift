@@ -1,6 +1,11 @@
 import Foundation
 
 enum APIClient {
+    private static let pipedInstances = [
+        "https://api.piped.private.coffee",
+        "https://pipedapi.darkness.services",
+    ]
+
     static func fetchPartyName(baseURL: String, code: String) async -> String {
         let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "\(baseURL)/api/party/\(normalized)") else {
@@ -44,39 +49,64 @@ enum APIClient {
         return nil
     }
 
-    static func fetchVideoURL(baseURL: String, code: String, videoId: String) async -> (url: String, type: String)? {
-        let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
-        guard let url = URL(string: "\(baseURL)/api/party/\(normalized)/video-url?v=\(videoId)") else {
-            print("[VideoURL] Invalid URL for \(videoId)")
-            return nil
+    static func fetchVideoURL(videoId: String) async -> (url: String, type: String)? {
+        for instance in pipedInstances {
+            if let result = await fetchFromPiped(videoId: videoId, instance: instance) {
+                return result
+            }
         }
+        print("[VideoURL] All sources failed for \(videoId)")
+        return nil
+    }
+
+    private static func fetchFromPiped(videoId: String, instance: String) async -> (url: String, type: String)? {
+        guard let url = URL(string: "\(instance)/streams/\(videoId)") else { return nil }
         do {
             var request = URLRequest(url: url)
-            request.timeoutInterval = 30
-            print("[VideoURL] Fetching stream for \(videoId)...")
+            request.timeoutInterval = 15
+            print("[VideoURL] Trying \(instance)...")
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                print("[VideoURL] No HTTP response")
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                print("[VideoURL] \(instance) returned \((response as? HTTPURLResponse)?.statusCode ?? 0)")
                 return nil
             }
-            print("[VideoURL] Status: \(http.statusCode)")
-            guard http.statusCode == 200 else {
-                if let body = String(data: data, encoding: .utf8) {
-                    print("[VideoURL] Error body: \(body)")
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                print("[VideoURL] \(instance) returned invalid JSON")
+                return nil
+            }
+
+            if let hls = json["hls"] as? String, !hls.isEmpty {
+                print("[VideoURL] Got HLS from \(instance)")
+                return (hls, "hls")
+            }
+
+            if let streams = json["videoStreams"] as? [[String: Any]] {
+                let combined = streams.filter { !($0["videoOnly"] as? Bool ?? true) }
+                let mp4 = combined.filter {
+                    ($0["format"] as? String) == "MPEG_4" ||
+                    (($0["mimeType"] as? String) ?? "").contains("video/mp4")
                 }
-                return nil
+                let best = (mp4.isEmpty ? combined : mp4)
+                    .sorted { (parseInt($0["quality"]) ?? 0) > (parseInt($1["quality"]) ?? 0) }
+                if let first = best.first, let streamUrl = first["url"] as? String {
+                    let quality = first["quality"] as? String ?? "unknown"
+                    print("[VideoURL] Got \(quality) stream from \(instance)")
+                    return (streamUrl, "mp4")
+                }
             }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let streamURL = json["url"] as? String,
-               let type = json["type"] as? String {
-                print("[VideoURL] Got \(type) URL (\(streamURL.prefix(80))...)")
-                return (streamURL, type)
-            }
-            print("[VideoURL] Could not parse response")
+
+            print("[VideoURL] \(instance) had no usable streams")
         } catch {
-            print("[VideoURL] Error: \(error.localizedDescription)")
+            print("[VideoURL] \(instance) error: \(error.localizedDescription)")
         }
         return nil
+    }
+
+    private static func parseInt(_ value: Any?) -> Int? {
+        if let str = value as? String {
+            return Int(str.replacingOccurrences(of: "p", with: ""))
+        }
+        return value as? Int
     }
 
     static func skipSong(baseURL: String, code: String, adminKey: String) async {
