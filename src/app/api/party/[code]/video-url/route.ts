@@ -1,41 +1,23 @@
 import { NextResponse } from "next/server";
 import { getParty } from "@/lib/store";
-import ytdl from "@distube/ytdl-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PIPED_FALLBACK = "https://api.piped.private.coffee";
-const INVIDIOUS_FALLBACK = "https://invidious.darkness.services";
+const PIPED_INSTANCES = [
+  "https://api.piped.private.coffee",
+  "https://pipedapi.darkness.services",
+  "https://pipedapi.adminforge.de",
+];
 
-async function extractViaYtdl(videoId: string) {
-  const info = await ytdl.getInfo(videoId);
+const INVIDIOUS_INSTANCES = [
+  "https://invidious.darkness.services",
+];
 
-  const hlsFormat = info.formats.find(
-    (f) => f.isHLS && f.hasVideo && f.hasAudio,
-  );
-  if (hlsFormat) {
-    return { url: hlsFormat.url, type: "hls", quality: hlsFormat.qualityLabel };
-  }
-
-  const combined = info.formats
-    .filter((f) => f.hasVideo && f.hasAudio && f.container === "mp4")
-    .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
-
-  if (combined.length > 0) {
-    return {
-      url: combined[0].url,
-      type: "mp4",
-      quality: combined[0].qualityLabel,
-    };
-  }
-
-  return null;
-}
-
-async function extractViaPiped(videoId: string) {
-  const res = await fetch(`${PIPED_FALLBACK}/streams/${videoId}`, {
-    signal: AbortSignal.timeout(10000),
+async function extractViaPiped(videoId: string, instanceUrl: string) {
+  const res = await fetch(`${instanceUrl}/streams/${videoId}`, {
+    signal: AbortSignal.timeout(15000),
+    headers: { "User-Agent": "Jukebox/1.0" },
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -49,13 +31,20 @@ async function extractViaPiped(videoId: string) {
     quality: string;
     videoOnly: boolean;
     format: string;
+    mimeType: string;
   }>;
+
   const combined = streams
-    .filter((s) => !s.videoOnly && s.format === "MPEG_4")
-    .sort(
-      (a, b) =>
-        parseInt(b.quality) - parseInt(a.quality),
-    );
+    .filter((s) => !s.videoOnly)
+    .sort((a, b) => parseInt(b.quality) - parseInt(a.quality));
+
+  const mp4 = combined.filter(
+    (s) => s.format === "MPEG_4" || s.mimeType?.includes("video/mp4"),
+  );
+  if (mp4.length > 0) {
+    return { url: mp4[0].url, type: "mp4", quality: mp4[0].quality };
+  }
+
   if (combined.length > 0) {
     return { url: combined[0].url, type: "mp4", quality: combined[0].quality };
   }
@@ -63,10 +52,14 @@ async function extractViaPiped(videoId: string) {
   return null;
 }
 
-async function extractViaInvidious(videoId: string) {
+async function extractViaInvidiousProxy(
+  videoId: string,
+  instanceUrl: string,
+) {
+  const host = new URL(instanceUrl).host;
   const res = await fetch(
-    `${INVIDIOUS_FALLBACK}/api/v1/videos/${videoId}?fields=formatStreams,adaptiveFormats`,
-    { signal: AbortSignal.timeout(10000) },
+    `${instanceUrl}/api/v1/videos/${videoId}?fields=formatStreams,adaptiveFormats`,
+    { signal: AbortSignal.timeout(15000) },
   );
   if (!res.ok) return null;
   const data = await res.json();
@@ -74,12 +67,14 @@ async function extractViaInvidious(videoId: string) {
   const formats = (data.formatStreams ?? []) as Array<{
     url: string;
     qualityLabel: string;
-    type: string;
     container: string;
+    itag: string;
   }>;
+
   const mp4 = formats.filter((f) => f.container === "mp4");
   if (mp4.length > 0) {
-    return { url: mp4[0].url, type: "mp4", quality: mp4[0].qualityLabel };
+    const proxiedUrl = `${instanceUrl}/latest_version?id=${videoId}&itag=${mp4[0].itag}`;
+    return { url: proxiedUrl, type: "mp4", quality: mp4[0].qualityLabel };
   }
 
   return null;
@@ -100,21 +95,39 @@ export async function GET(
     return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
   }
 
-  const strategies = [extractViaYtdl, extractViaPiped, extractViaInvidious];
+  const errors: string[] = [];
 
-  for (const strategy of strategies) {
+  for (const instance of PIPED_INSTANCES) {
     try {
-      const result = await strategy(videoId);
+      const result = await extractViaPiped(videoId, instance);
       if (result) {
-        return NextResponse.json(result);
+        return NextResponse.json({ ...result, source: "piped" });
       }
-    } catch {
-      continue;
+    } catch (e: unknown) {
+      errors.push(
+        `piped(${instance}): ${e instanceof Error ? e.message : "unknown"}`,
+      );
+    }
+  }
+
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const result = await extractViaInvidiousProxy(videoId, instance);
+      if (result) {
+        return NextResponse.json({ ...result, source: "invidious" });
+      }
+    } catch (e: unknown) {
+      errors.push(
+        `invidious(${instance}): ${e instanceof Error ? e.message : "unknown"}`,
+      );
     }
   }
 
   return NextResponse.json(
-    { error: "No playable format found from any source" },
+    {
+      error: "No playable format found from any source",
+      tried: errors,
+    },
     { status: 502 },
   );
 }

@@ -279,14 +279,13 @@ class VideoPlayerState: ObservableObject {
 
     private var currentVideoId: String?
     private var loadTask: Task<Void, Never>?
+    private var statusObserver: NSKeyValueObservation?
+    private var errorObserver: NSKeyValueObservation?
 
     func loadVideo(baseURL: String, code: String, videoId: String) {
         guard videoId != currentVideoId else { return }
         currentVideoId = videoId
-        loadTask?.cancel()
-        player?.pause()
-        player = nil
-        isPlaying = false
+        cleanupPlayer()
         isLoading = true
         errorMessage = nil
 
@@ -306,11 +305,33 @@ class VideoPlayerState: ObservableObject {
                 return
             }
 
-            let avPlayer = AVPlayer(url: url)
+            print("[Video] Playing \(result.type) from: \(url.absoluteString.prefix(100))")
+            let item = AVPlayerItem(url: url)
+            let avPlayer = AVPlayer(playerItem: item)
+
+            statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor in
+                    guard let self, self.currentVideoId == videoId else { return }
+                    switch item.status {
+                    case .readyToPlay:
+                        print("[Video] Ready to play")
+                        self.isPlaying = true
+                        self.isLoading = false
+                        self.errorMessage = nil
+                    case .failed:
+                        let err = item.error?.localizedDescription ?? "Unknown playback error"
+                        print("[Video] Failed: \(err)")
+                        self.isPlaying = false
+                        self.isLoading = false
+                        self.errorMessage = err
+                    default:
+                        break
+                    }
+                }
+            }
+
             player = avPlayer
-            isPlaying = true
-            isLoading = false
-            errorMessage = nil
+            isLoading = true
             avPlayer.play()
         }
     }
@@ -318,12 +339,20 @@ class VideoPlayerState: ObservableObject {
     func stop() {
         loadTask?.cancel()
         loadTask = nil
+        cleanupPlayer()
+        errorMessage = nil
+        currentVideoId = nil
+    }
+
+    private func cleanupPlayer() {
+        statusObserver?.invalidate()
+        statusObserver = nil
+        errorObserver?.invalidate()
+        errorObserver = nil
         player?.pause()
         player = nil
         isPlaying = false
         isLoading = false
-        errorMessage = nil
-        currentVideoId = nil
     }
 }
 
