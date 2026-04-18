@@ -40,6 +40,24 @@ struct PlayerScreen: View {
                 }
             }
 
+            // QR code — always visible bottom-right
+            if party.nowPlaying != nil || party.endedAt == nil {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        QRCodeView(code: code)
+                            .frame(width: 120, height: 120)
+                            .padding(6)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(12)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, adminKey != nil ? 56 : 16)
+                    }
+                }
+                .zIndex(15)
+            }
+
             if adminKey != nil {
                 VStack {
                     Spacer()
@@ -60,7 +78,7 @@ struct PlayerScreen: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 24)
-                        .padding(.bottom, 52)
+                        .padding(.bottom, 16)
                     }
                 }
                 .zIndex(20)
@@ -90,22 +108,13 @@ struct PlayerScreen: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 0) {
+        Group {
             if let marquee = party.marquee, !marquee.isEmpty {
                 MarqueeText(text: marquee)
-                    .frame(maxWidth: .infinity)
                     .frame(height: 36)
-            } else {
-                Spacer()
+                    .background(Color.black.opacity(0.6))
             }
-
-            QRCodeView(code: code)
-                .frame(width: 100, height: 100)
-                .padding(8)
-                .background(Color.black.opacity(0.5))
-                .cornerRadius(10)
         }
-        .background(Color.black.opacity(0.6))
     }
 
     private var upNextStrip: some View {
@@ -401,19 +410,46 @@ struct QRCodeView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .cornerRadius(8)
+        } else {
+            VStack(spacing: 4) {
+                Image(systemName: "qrcode")
+                    .font(.system(size: 40))
+                    .foregroundColor(.white)
+                Text("Scan to join")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.7))
+                Text(code)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(Color("BrandPrimary"))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(8)
         }
     }
 
     private func generateQR() -> UIImage? {
         let urlString = "\(Configuration.baseURL)/party/\(code)"
         guard let data = urlString.data(using: .ascii),
-              let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+              let filter = CIFilter(name: "CIQRCodeGenerator") else {
+            print("[QR] CIFilter not available")
+            return nil
+        }
         filter.setValue(data, forKey: "inputMessage")
         filter.setValue("M", forKey: "inputCorrectionLevel")
-        guard let output = filter.outputImage else { return nil }
+        guard let output = filter.outputImage else {
+            print("[QR] No output image")
+            return nil
+        }
         let scale = 256.0 / output.extent.width
         let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        return UIImage(ciImage: scaled)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else {
+            print("[QR] Failed to create CGImage")
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
 }
 
