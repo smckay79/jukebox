@@ -14,7 +14,7 @@ export default async function Home() {
       <header className="mb-10 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-web.png" alt="VideoJam" className="w-[300px] md:w-[360px]" />
+          <img src="/logo-web.png" alt="VideoJam" className="w-[500px]" />
         </Link>
         <div className="flex items-center gap-3">
           {showAdmin && (
