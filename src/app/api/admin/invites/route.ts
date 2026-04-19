@@ -25,6 +25,7 @@ export async function POST(req: Request) {
   let body: {
     action?: string;
     code?: string;
+    customCode?: string;
     maxUses?: number;
     grantDays?: number;
     recipientEmail?: string;
@@ -42,18 +43,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok });
   }
 
-  const invite = await createInvite({
-    createdBy: admin.id,
-    createdByName: admin.name,
-    type: "admin",
-    maxUses: body.maxUses ?? 1,
-    grantDays: body.grantDays ?? 90,
-    recipientEmail: body.recipientEmail,
-    message: body.message,
-    expiresAt: body.expiresInDays
-      ? Date.now() + body.expiresInDays * 24 * 60 * 60 * 1000
-      : undefined,
-  });
+  let invite;
+  try {
+    invite = await createInvite({
+      createdBy: admin.id,
+      createdByName: admin.name,
+      type: "admin",
+      customCode: body.customCode,
+      maxUses: body.maxUses ?? 1,
+      grantDays: body.grantDays ?? 90,
+      recipientEmail: body.recipientEmail,
+      message: body.message,
+      expiresAt: body.expiresInDays
+        ? Date.now() + body.expiresInDays * 24 * 60 * 60 * 1000
+        : undefined,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: (e as Error).message },
+      { status: 409 },
+    );
+  }
 
   let emailResult = null;
   if (body.recipientEmail) {

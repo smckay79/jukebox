@@ -621,6 +621,7 @@ function InvitesTab({
   onUpdate: () => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const [customCode, setCustomCode] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [maxUses, setMaxUses] = useState(1);
@@ -636,6 +637,7 @@ function InvitesTab({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          customCode: customCode.trim() || undefined,
           recipientEmail: email || undefined,
           message: message || undefined,
           maxUses,
@@ -651,10 +653,13 @@ function InvitesTab({
             ? ` — email failed, share the link manually`
             : "";
         setResult(`Created: ${code}${emailNote}`);
+        setCustomCode("");
         setEmail("");
         setMessage("");
         setCreating(false);
         onUpdate();
+      } else {
+        setResult(data.error || "Failed to create invite");
       }
     } finally {
       setBusy(false);
@@ -694,6 +699,19 @@ function InvitesTab({
 
       {creating && (
         <div className="card space-y-3 p-4">
+          <div>
+            <label className="mb-1 block text-xs text-white/60">
+              Custom code (optional — leave blank for random)
+            </label>
+            <input
+              type="text"
+              className="input w-full font-mono uppercase tracking-wider"
+              placeholder="e.g. VIDEOJAM2026"
+              value={customCode}
+              onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              maxLength={20}
+            />
+          </div>
           <div>
             <label className="mb-1 block text-xs text-white/60">
               Recipient email (optional — sends invite email)

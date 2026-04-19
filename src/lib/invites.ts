@@ -93,14 +93,23 @@ export async function createInvite(opts: {
   createdBy: string;
   createdByName: string;
   type: "admin" | "referral";
+  customCode?: string;
   maxUses?: number;
   grantDays?: number;
   recipientEmail?: string;
   message?: string;
   expiresAt?: number;
 }): Promise<InviteCode> {
+  let code: string;
+  if (opts.customCode) {
+    code = opts.customCode.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+    const existing = await storage().get(code);
+    if (existing) throw new Error("Code already exists");
+  } else {
+    code = generateCode();
+  }
   const invite: InviteCode = {
-    code: generateCode(),
+    code,
     createdAt: Date.now(),
     createdBy: opts.createdBy,
     createdByName: opts.createdByName,
