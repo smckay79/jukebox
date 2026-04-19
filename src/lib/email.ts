@@ -35,6 +35,54 @@ export function isEmailConfigured(): boolean {
   return !!process.env.RESEND_API_KEY;
 }
 
+export async function sendAdminNotification(
+  subject: string,
+  body: string,
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.ADMIN_NOTIFY_EMAIL;
+  if (!apiKey || !to) return;
+  const from = process.env.RESEND_FROM || "VideoJam <onboarding@resend.dev>";
+  const p = randomPalette();
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: `[VideoJam] ${subject}`,
+        html: `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${p.bg};font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#fff">
+    <div style="max-width:520px;margin:0 auto;padding:32px 16px">
+      <div style="background:linear-gradient(160deg,${p.bg} 0%,#000 100%);border-radius:16px;overflow:hidden;border:1px solid ${p.c1}33">
+        <div style="background:linear-gradient(135deg,${p.c1} 0%,${p.c2} 100%);padding:20px 24px;text-align:center">
+          <img src="https://videojam.net/logo-web.png" alt="VideoJam" style="width:300px;max-width:100%;height:auto" />
+        </div>
+        <div style="padding:24px">
+          <h2 style="margin:0 0 12px;font-size:18px;color:${p.accent}">${esc(subject)}</h2>
+          <div style="font-size:14px;line-height:1.7;color:#ccc">${body}</div>
+          <p style="margin:20px 0 0;font-size:11px;color:#666">
+            ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })} ET
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`,
+        text: `[VideoJam] ${subject}\n\n${body.replace(/<[^>]+>/g, "")}`,
+      }),
+      cache: "no-store",
+    });
+  } catch {
+    // fire-and-forget — don't break the caller
+  }
+}
+
 export async function sendRecapEmail(
   to: string,
   recap: PartyRecap,

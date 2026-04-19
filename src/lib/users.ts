@@ -144,7 +144,7 @@ export async function upsertUserFromGoogle(claims: {
   email: string;
   name: string;
   picture?: string;
-}): Promise<User> {
+}): Promise<User & { isNew: boolean }> {
   const now = Date.now();
   const existing = await storage().getUser(claims.sub);
   const user: User = {
@@ -162,7 +162,7 @@ export async function upsertUserFromGoogle(claims: {
   };
   await storage().setUser(user);
   await addUserToIndex(user.id);
-  return user;
+  return { ...user, isNew: !existing };
 }
 
 // ---------- user index (for admin portal) ----------

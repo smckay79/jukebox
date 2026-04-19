@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { sendAdminNotification } from "@/lib/email";
+
+function esc(v: string) {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 import { getSubscriptionInfo } from "@/lib/subscription";
 import {
   canUserCreateInvite,
@@ -61,6 +66,11 @@ export async function POST(req: Request) {
       subscriptionPaidUntil: base + grantMs,
       subscriptionSource: "stripe",
     });
+    sendAdminNotification(
+      "Invite Redeemed",
+      `<p><strong>${esc(user.name)}</strong> (${esc(user.email)}) redeemed invite code <strong>${esc(body.code)}</strong>.</p>` +
+      `<p>Granted ${result.grantDays} days of Pro. Invited by ${esc(result.inviterName)}.</p>`,
+    ).catch(() => {});
     return NextResponse.json({
       ok: true,
       grantDays: result.grantDays,

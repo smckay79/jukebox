@@ -6,7 +6,12 @@ import {
   toPublicUser,
   verifyGoogleIdToken,
 } from "@/lib/auth";
+import { sendAdminNotification } from "@/lib/email";
 import { upsertUserFromGoogle } from "@/lib/users";
+
+function esc(v: string) {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +40,12 @@ export async function POST(req: Request) {
   }
 
   const user = await upsertUserFromGoogle(claims);
+  if (user.isNew) {
+    sendAdminNotification(
+      "New User Signup",
+      `<p><strong>${esc(user.name)}</strong> (${esc(user.email)}) just signed up.</p>`,
+    ).catch(() => {});
+  }
   const cookie = await createSession(user.id);
 
   const res = NextResponse.json({ user: toPublicUser(user) });
