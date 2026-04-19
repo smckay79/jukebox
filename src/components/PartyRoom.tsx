@@ -203,6 +203,36 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     }
   }
 
+  async function onPlaybackError(videoId: string, errorCode: number) {
+    setParty((p) => {
+      if (!p.nowPlaying || p.nowPlaying.videoId !== videoId) return p;
+      const sorted = [...p.queue].sort((a, b) =>
+        b.votes.length !== a.votes.length
+          ? b.votes.length - a.votes.length
+          : a.addedAt - b.addedAt,
+      );
+      const next = sorted[0] ?? null;
+      return {
+        ...p,
+        nowPlaying: next,
+        queue: next ? p.queue.filter((s) => s.id !== next.id) : p.queue,
+      };
+    });
+    try {
+      const res = await fetch(`/api/party/${party.code}/report-error`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoId, errorCode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setParty(data.party as PublicParty);
+      }
+    } catch {
+      refresh();
+    }
+  }
+
   async function onEnded(videoId: string) {
     // Optimistically advance the local party state so the Player loads the
     // next song immediately — before the server round-trip — cutting the
@@ -428,6 +458,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           isAdmin={isAdmin}
           isPro={isPro}
           onEnded={onEnded}
+          onPlaybackError={onPlaybackError}
           onSkip={onSkip}
           onDownvote={isPro ? onDownvote : undefined}
           onGoldenDownvote={isAdmin ? onGoldenDownvote : undefined}
@@ -527,6 +558,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             <Player
               song={party.nowPlaying}
               onEnded={onEnded}
+              onPlaybackError={onPlaybackError}
               partyCode={party.code}
               downvotes={party.nowPlaying?.downvotes?.length ?? 0}
               goldenSkip={party.nowPlaying?.goldenSkip ?? false}
@@ -707,6 +739,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               <Player
                 song={party.nowPlaying}
                 onEnded={onEnded}
+                onPlaybackError={onPlaybackError}
                 partyCode={party.code}
                 fill={presenterMode}
                 downvotes={party.nowPlaying?.downvotes?.length ?? 0}

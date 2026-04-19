@@ -13,6 +13,7 @@ export default function TVMode({
   isAdmin,
   isPro,
   onEnded,
+  onPlaybackError,
   onSkip,
   onDownvote,
   onGoldenDownvote,
@@ -23,6 +24,7 @@ export default function TVMode({
   isAdmin: boolean;
   isPro: boolean;
   onEnded: (videoId: string) => void;
+  onPlaybackError?: (videoId: string, errorCode: number) => void;
   onSkip: () => void;
   onDownvote?: () => void;
   onGoldenDownvote?: () => void;
@@ -67,6 +69,7 @@ export default function TVMode({
         <Player
           song={party.nowPlaying}
           onEnded={onEnded}
+          onPlaybackError={onPlaybackError}
           partyCode={party.code}
           fill
           downvotes={party.nowPlaying?.downvotes?.length ?? 0}

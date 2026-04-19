@@ -61,6 +61,7 @@ function loadYouTubeApi(): Promise<void> {
 export default function Player({
   song,
   onEnded,
+  onPlaybackError,
   partyCode,
   fill,
   downvotes = 0,
@@ -73,6 +74,7 @@ export default function Player({
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
+  onPlaybackError?: (videoId: string, errorCode: number) => void;
   partyCode?: string;
   fill?: boolean;
   downvotes?: number;
@@ -88,6 +90,8 @@ export default function Player({
   const currentVideoRef = useRef<string | null>(null);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
+  const onPlaybackErrorRef = useRef(onPlaybackError);
+  onPlaybackErrorRef.current = onPlaybackError;
   const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
@@ -134,6 +138,12 @@ export default function Player({
               if (e.data === 1) setNeedsTap(false);
               if (e.data === 0 && currentVideoRef.current) {
                 onEndedRef.current(currentVideoRef.current);
+              }
+            },
+            onError: (e) => {
+              // 100 = not found/private, 101/150 = embedding disabled, 5 = HTML5 error
+              if (currentVideoRef.current) {
+                onPlaybackErrorRef.current?.(currentVideoRef.current, e.data);
               }
             },
           },
