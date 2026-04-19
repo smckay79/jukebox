@@ -468,11 +468,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
       <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-6">
         <div className="min-w-0">
-          <Link
-            href="/"
-            className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
-          >
-            VideoJam
+          <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-web.png" alt="VideoJam" className="h-6" />
           </Link>
           <h1 className="truncate text-xl font-bold md:text-3xl">
             {party.name}

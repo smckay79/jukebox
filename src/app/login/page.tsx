@@ -31,11 +31,9 @@ function LoginInner() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-4">
       <div className="card w-full space-y-5 p-6 text-center">
         <div>
-          <Link
-            href="/"
-            className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
-          >
-            VideoJam
+          <Link href="/" className="inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-web.png" alt="VideoJam" className="mx-auto h-10" />
           </Link>
           <h1 className="mt-1 text-2xl font-bold">Sign in</h1>
           <p className="mt-2 text-sm text-white/60">

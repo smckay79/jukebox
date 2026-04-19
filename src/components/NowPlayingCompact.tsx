@@ -19,8 +19,9 @@ export default function NowPlayingCompact({
   if (!song) {
     return (
       <div className="card flex items-center gap-3 p-3 text-white/50">
-        <div className="grid h-12 w-20 flex-shrink-0 place-items-center rounded bg-black/40 text-xs">
-          ♪
+        <div className="grid h-12 w-20 flex-shrink-0 place-items-center rounded bg-black/40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-web.png" alt="" className="h-6 opacity-50" />
         </div>
         <div className="min-w-0 flex-1 text-sm">
           Nothing playing yet — add a banger below!

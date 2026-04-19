@@ -224,11 +224,9 @@ export default function AdminDashboard() {
     <main className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <Link
-            href="/"
-            className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
-          >
-            VideoJam
+          <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-web.png" alt="VideoJam" className="h-6" />
           </Link>
           <h1 className="text-2xl font-bold">Admin Portal</h1>
         </div>

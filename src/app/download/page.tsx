@@ -12,10 +12,8 @@ export default function DownloadPage() {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <header className="mb-10 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600">
-            <span aria-hidden>♪</span>
-          </span>
-          VideoJam
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-web.png" alt="VideoJam" className="h-8" />
         </Link>
         <Link href="/" className="text-sm text-white/40 hover:text-white/70">
           ← Back
@@ -24,9 +22,8 @@ export default function DownloadPage() {
 
       {/* Hero */}
       <section className="mb-12 text-center">
-        <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-400 text-4xl shadow-lg shadow-brand-600/30">
-          <span aria-hidden>♪</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-web.png" alt="VideoJam" className="mx-auto mb-6 h-16" />
         <h1 className="text-3xl font-bold md:text-5xl">
           Install{" "}
           <span className="bg-gradient-to-r from-brand-400 to-pink-400 bg-clip-text text-transparent">

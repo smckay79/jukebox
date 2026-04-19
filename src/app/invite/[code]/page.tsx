@@ -134,7 +134,7 @@ export default function InvitePage() {
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#120a1f] shadow-2xl">
           {/* Gradient header */}
           <div className="bg-gradient-to-br from-brand-600 to-pink-600 px-6 py-8 text-center">
-            <div className="mb-2 text-4xl">♪</div>
+            <img src="/logo-web.png" alt="VideoJam" style={{ height: 48, margin: '0 auto 8px' }} />
             <h1 className="text-2xl font-bold">You&apos;re invited!</h1>
             <p className="mt-1 text-white/90">
               {invite.inviterName} wants you at the party

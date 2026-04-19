@@ -113,7 +113,7 @@ function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
     <div style="max-width:520px;margin:0 auto;padding:32px 16px">
       <div style="background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7e4ef;text-align:center">
         <div style="background:linear-gradient(135deg,#7c3aed 0%,#ec4899 100%);padding:32px 24px;color:#fff">
-          <div style="font-size:36px;margin-bottom:8px">♪</div>
+          <img src="https://videojam.net/logo-web.png" alt="VideoJam" style="height:48px;margin-bottom:8px" />
           <h1 style="margin:0;font-size:24px;font-weight:700">You&rsquo;re invited!</h1>
           <p style="margin:8px 0 0;font-size:15px;opacity:0.9">${esc(invite.createdByName)} wants you at the party</p>
         </div>

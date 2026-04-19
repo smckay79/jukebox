@@ -83,9 +83,8 @@ export default function AddToHomeScreen() {
           }}
         >
           <div className="w-full max-w-sm animate-slide-up rounded-2xl bg-zinc-900 p-6 text-center shadow-2xl">
-            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-pink-500 text-2xl shadow-lg shadow-brand-600/30">
-              <span aria-hidden>♪</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-web.png" alt="VideoJam" className="mx-auto mb-4 h-12" />
             <h3 className="mb-1 text-lg font-bold">Add VideoJam to Home Screen</h3>
             <p className="mb-5 text-sm text-white/50">
               Get the full-screen app experience

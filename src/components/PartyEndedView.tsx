@@ -65,11 +65,9 @@ export default function PartyEndedView({
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6">
-        <Link
-          href="/"
-          className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
-        >
-          VideoJam
+        <Link href="/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-web.png" alt="VideoJam" className="h-6" />
         </Link>
         <h1 className="mt-1 text-3xl font-bold">{name}</h1>
         <div className="mt-1 text-sm text-white/60">

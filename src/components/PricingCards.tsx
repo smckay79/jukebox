@@ -94,11 +94,9 @@ export default function PricingCards() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
       <div className="mb-4">
-        <Link
-          href="/"
-          className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
-        >
-          VideoJam
+        <Link href="/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-web.png" alt="VideoJam" className="h-6" />
         </Link>
       </div>
       <h1 className="mb-2 text-3xl font-bold">Pick your plan</h1>
