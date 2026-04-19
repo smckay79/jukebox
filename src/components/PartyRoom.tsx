@@ -20,7 +20,7 @@ import SettingsMenu from "./SettingsMenu";
 import SubscriptionBanner from "./SubscriptionBanner";
 import TVMode from "./TVMode";
 import UserMenu from "./UserMenu";
-import { getAdminKey, getAdminPin, getUserId } from "@/lib/identity";
+import { getAdminKey, getAdminPin, getUserId, setAdminKey, setAdminPin } from "@/lib/identity";
 import type {
   PartyRecap,
   PartyTheme,
@@ -93,8 +93,27 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
 
   useEffect(() => {
     setUserId(getUserId());
-    setAdmin(getAdminKey(initial.code));
-    setPin(getAdminPin(initial.code));
+    const savedKey = getAdminKey(initial.code);
+    const savedPin = getAdminPin(initial.code);
+    if (savedKey) {
+      setAdmin(savedKey);
+      setPin(savedPin);
+    } else {
+      // No key in localStorage — try reclaiming via signed-in session
+      fetch(`/api/party/${initial.code}/reclaim`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.adminKey) {
+            setAdminKey(initial.code, data.adminKey);
+            setAdmin(data.adminKey);
+            if (data.adminPin) {
+              setAdminPin(initial.code, data.adminPin);
+              setPin(data.adminPin);
+            }
+          }
+        })
+        .catch(() => {});
+    }
   }, [initial.code]);
 
   const refresh = useCallback(async () => {
