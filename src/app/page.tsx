@@ -14,7 +14,7 @@ export default async function Home() {
       <header className="mb-10 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-web.png" alt="VideoJam" className="h-8" />
+          <img src="/logo-web.png" alt="VideoJam" className="h-14 md:h-16" />
         </Link>
         <div className="flex items-center gap-3">
           {showAdmin && (
@@ -30,12 +30,12 @@ export default async function Home() {
       </header>
 
       <section className="mb-12">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo-hero.png"
-          alt="VideoJam.NET — Where Everyone Is the VJ"
-          className="mx-auto mb-6 max-w-md md:max-w-xl"
-        />
+        <h1 className="text-4xl font-bold leading-tight md:text-6xl">
+          Where Everybody{" "}
+          <span className="bg-gradient-to-r from-brand-400 to-pink-400 bg-clip-text text-transparent">
+            Is The VJ!
+          </span>
+        </h1>
         <p className="mt-4 max-w-2xl text-lg text-white/70">
           Start a party, share the QR code, and let anyone in the room queue up
           YouTube videos. Upvote the bangers. The host can skip or yank songs.
