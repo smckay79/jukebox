@@ -2,6 +2,7 @@ import Link from "next/link";
 import JoinForm from "@/components/JoinForm";
 import CreatePartyForm from "@/components/CreatePartyForm";
 import UserMenu from "@/components/UserMenu";
+import RandomBackground from "@/components/RandomBackground";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -11,6 +12,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
+      <RandomBackground />
       <header className="mb-10 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
