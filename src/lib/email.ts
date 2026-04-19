@@ -6,7 +6,7 @@ import { formatDuration } from "./recap";
 // no deps — matches the rest of this app's "one small fetch" style.
 // Config is entirely via env:
 //   RESEND_API_KEY  — required to enable email at all
-//   RESEND_FROM     — optional; e.g. "Jukebox <recap@yourdomain.com>".
+//   RESEND_FROM     — optional; e.g. "VideoJam <recap@yourdomain.com>".
 //                     Falls back to Resend's sandbox "onboarding@resend.dev".
 //
 // When the key isn't set we return a `not-configured` failure — callers
@@ -33,8 +33,8 @@ export async function sendRecapEmail(
   if (!to || !/.+@.+\..+/.test(to)) {
     return { ok: false, reason: "invalid-recipient" };
   }
-  const from = process.env.RESEND_FROM || "Jukebox <onboarding@resend.dev>";
-  const subject = `Your Jukebox recap — ${recap.name}`;
+  const from = process.env.RESEND_FROM || "VideoJam <onboarding@resend.dev>";
+  const subject = `Your VideoJam recap — ${recap.name}`;
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -72,9 +72,9 @@ export async function sendInviteEmail(
   if (!apiKey) return { ok: false, reason: "not-configured" };
   if (!to || !/.+@.+\..+/.test(to)) return { ok: false, reason: "invalid-recipient" };
 
-  const from = process.env.RESEND_FROM || "Jukebox <onboarding@resend.dev>";
+  const from = process.env.RESEND_FROM || "VideoJam <onboarding@resend.dev>";
   const inviteUrl = `${appUrl}/invite/${invite.code}`;
-  const subject = `${invite.createdByName} invited you to Jukebox Pro`;
+  const subject = `${invite.createdByName} invited you to VideoJam Pro`;
 
   const html = renderInviteHtml(invite, inviteUrl);
   const text = renderInviteText(invite, inviteUrl);
@@ -120,8 +120,8 @@ function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
         <div style="padding:28px 24px">
           ${messageHtml}
           <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px">
-            You&rsquo;ve been personally invited to <strong>Jukebox</strong> &mdash; the live YouTube party playlist.
-            Claim your invite and get <strong>${months} months of Jukebox Pro</strong> free.
+            You&rsquo;ve been personally invited to <strong>VideoJam</strong> &mdash; the live YouTube party playlist.
+            Claim your invite and get <strong>${months} months of VideoJam Pro</strong> free.
           </p>
           <div style="margin:24px 0">
             <a href="${esc(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:#fff;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none">
@@ -139,7 +139,7 @@ function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
         </div>
       </div>
       <p style="color:#999;font-size:11px;text-align:center;margin:16px 0 0">
-        Jukebox &mdash; Your party&rsquo;s group playlist, live from YouTube.
+        VideoJam &mdash; Where Everybody Is The VJ!&rsquo;s group playlist, live from YouTube.
       </p>
     </div>
   </body>
@@ -149,7 +149,7 @@ function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
 function renderInviteText(invite: InviteCode, inviteUrl: string): string {
   const months = Math.round(invite.grantDays / 30);
   const lines: string[] = [];
-  lines.push(`You're invited to Jukebox Pro!`);
+  lines.push(`You're invited to VideoJam Pro!`);
   lines.push(`${invite.createdByName} wants you at the party.`);
   lines.push("");
   if (invite.message) {
@@ -157,7 +157,7 @@ function renderInviteText(invite: InviteCode, inviteUrl: string): string {
     lines.push("");
   }
   lines.push(
-    `Claim your invite and get ${months} months of Jukebox Pro free.`,
+    `Claim your invite and get ${months} months of VideoJam Pro free.`,
   );
   lines.push("");
   lines.push(`Your invite code: ${invite.code}`);
@@ -220,7 +220,7 @@ function renderRecapHtml(recap: PartyRecap): string {
     <div style="max-width:620px;margin:0 auto;padding:24px 16px">
       <div style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e7e4ef">
         <div style="padding:20px 24px;border-bottom:1px solid #eee">
-          <div style="color:#888;font-size:11px;letter-spacing:0.15em;text-transform:uppercase">Jukebox recap</div>
+          <div style="color:#888;font-size:11px;letter-spacing:0.15em;text-transform:uppercase">VideoJam recap</div>
           <h1 style="margin:4px 0 0;font-size:22px">${esc(recap.name)}</h1>
           <div style="color:#888;font-size:13px;margin-top:4px">
             Code <code style="background:#f1edfa;padding:1px 6px;border-radius:4px">${esc(recap.code)}</code>
@@ -258,7 +258,7 @@ function renderRecapHtml(recap: PartyRecap): string {
 
 function renderRecapText(recap: PartyRecap): string {
   const lines: string[] = [];
-  lines.push(`Jukebox recap — ${recap.name} (code ${recap.code})`);
+  lines.push(`VideoJam recap — ${recap.name} (code ${recap.code})`);
   lines.push(
     `${recap.totalPlayed} song${recap.totalPlayed === 1 ? "" : "s"} played · ${formatDuration(recap.totalSeconds)} of music`,
   );

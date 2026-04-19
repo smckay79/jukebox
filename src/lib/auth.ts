@@ -34,15 +34,15 @@ function getAuthSecret(): string {
       "AUTH_SECRET is required in production (32+ random bytes).",
     );
   }
-  const g = globalThis as unknown as { __jukeboxDevSecret?: string };
-  if (!g.__jukeboxDevSecret) {
-    g.__jukeboxDevSecret = randomBytes(32).toString("hex");
+  const g = globalThis as unknown as { __videojamDevSecret?: string };
+  if (!g.__videojamDevSecret) {
+    g.__videojamDevSecret = randomBytes(32).toString("hex");
     console.warn(
       "[auth] No AUTH_SECRET set; generated an ephemeral one for dev. " +
         "Sessions will not survive process restarts.",
     );
   }
-  return g.__jukeboxDevSecret;
+  return g.__videojamDevSecret;
 }
 
 function sign(value: string): string {
@@ -67,10 +67,10 @@ class MemorySessions implements SessionStorage {
   private store: Map<string, SessionRecord>;
   constructor() {
     const g = globalThis as unknown as {
-      __jukeboxSessions?: Map<string, SessionRecord>;
+      __videojamSessions?: Map<string, SessionRecord>;
     };
-    if (!g.__jukeboxSessions) g.__jukeboxSessions = new Map();
-    this.store = g.__jukeboxSessions;
+    if (!g.__videojamSessions) g.__videojamSessions = new Map();
+    this.store = g.__videojamSessions;
   }
   async get(id: string) {
     const rec = this.store.get(id);

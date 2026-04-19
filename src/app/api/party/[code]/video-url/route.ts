@@ -17,7 +17,7 @@ const INVIDIOUS_INSTANCES = [
 async function extractViaPiped(videoId: string, instanceUrl: string) {
   const res = await fetch(`${instanceUrl}/streams/${videoId}`, {
     signal: AbortSignal.timeout(15000),
-    headers: { "User-Agent": "Jukebox/1.0" },
+    headers: { "User-Agent": "VideoJam/1.0" },
   });
   if (!res.ok) return null;
   const data = await res.json();

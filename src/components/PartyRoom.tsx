@@ -472,7 +472,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             href="/"
             className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
           >
-            Jukebox
+            VideoJam
           </Link>
           <h1 className="truncate text-xl font-bold md:text-3xl">
             {party.name}

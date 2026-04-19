@@ -7,7 +7,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISSED_KEY = "jukebox_a2hs_dismissed";
+const DISMISSED_KEY = "videojam_a2hs_dismissed";
 
 export default function AddToHomeScreen() {
   const [deferredPrompt, setDeferredPrompt] =
@@ -86,7 +86,7 @@ export default function AddToHomeScreen() {
             <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-pink-500 text-2xl shadow-lg shadow-brand-600/30">
               <span aria-hidden>♪</span>
             </div>
-            <h3 className="mb-1 text-lg font-bold">Add Jukebox to Home Screen</h3>
+            <h3 className="mb-1 text-lg font-bold">Add VideoJam to Home Screen</h3>
             <p className="mb-5 text-sm text-white/50">
               Get the full-screen app experience
             </p>

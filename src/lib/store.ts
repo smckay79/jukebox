@@ -63,9 +63,9 @@ class MemoryStorage implements Storage {
   private store: Map<string, Party>;
 
   constructor() {
-    const g = globalThis as unknown as { __jukeboxMem?: Map<string, Party> };
-    if (!g.__jukeboxMem) g.__jukeboxMem = new Map();
-    this.store = g.__jukeboxMem;
+    const g = globalThis as unknown as { __videojamMem?: Map<string, Party> };
+    if (!g.__videojamMem) g.__videojamMem = new Map();
+    this.store = g.__videojamMem;
   }
   async get(code: string) {
     const p = this.store.get(code);
@@ -946,9 +946,9 @@ async function addPartyToIndex(code: string): Promise<void> {
     await r.sadd("all_party_codes", code.toUpperCase());
     return;
   }
-  const g = globalThis as unknown as { __jukeboxPartyIndex?: Set<string> };
-  if (!g.__jukeboxPartyIndex) g.__jukeboxPartyIndex = new Set();
-  g.__jukeboxPartyIndex.add(code.toUpperCase());
+  const g = globalThis as unknown as { __videojamPartyIndex?: Set<string> };
+  if (!g.__videojamPartyIndex) g.__videojamPartyIndex = new Set();
+  g.__videojamPartyIndex.add(code.toUpperCase());
 }
 
 export async function listAllPartyCodes(): Promise<string[]> {
@@ -958,12 +958,12 @@ export async function listAllPartyCodes(): Promise<string[]> {
     return codes as string[];
   }
   const g = globalThis as unknown as {
-    __jukeboxMem?: Map<string, Party>;
-    __jukeboxPartyIndex?: Set<string>;
+    __videojamMem?: Map<string, Party>;
+    __videojamPartyIndex?: Set<string>;
   };
-  const fromMap = g.__jukeboxMem ? Array.from(g.__jukeboxMem.keys()) : [];
-  const fromIndex = g.__jukeboxPartyIndex
-    ? Array.from(g.__jukeboxPartyIndex)
+  const fromMap = g.__videojamMem ? Array.from(g.__videojamMem.keys()) : [];
+  const fromIndex = g.__videojamPartyIndex
+    ? Array.from(g.__videojamPartyIndex)
     : [];
   return Array.from(new Set([...fromMap, ...fromIndex]));
 }

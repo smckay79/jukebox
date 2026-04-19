@@ -1,6 +1,6 @@
-# Jukebox Player — Apple TV
+# VideoJam Player — Apple TV
 
-tvOS companion app for the Jukebox party system. Displays the party's
+tvOS companion app for the VideoJam party system. Displays the party's
 now-playing video, up-next strip, marquee, and QR code on the big screen.
 
 ## Requirements
@@ -11,10 +11,10 @@ now-playing video, up-next strip, marquee, and QR code on the big screen.
 
 ## Setup
 
-1. Open `JukeboxPlayer.xcodeproj` in Xcode.
+1. Open `VideoJamPlayer.xcodeproj` in Xcode.
 2. Set your team in **Signing & Capabilities**.
-3. The backend URL defaults to `https://jukebox-delta-three.vercel.app`.
-   To change it, edit the `JUKEBOX_BASE_URL` value in `Info.plist`.
+3. The backend URL defaults to `https://videojam.net`.
+   To change it, edit the `VIDEOJAM_BASE_URL` value in `Info.plist`.
 
 ## Architecture
 

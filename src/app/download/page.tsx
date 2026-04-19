@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Install Jukebox Player — TV, iPhone & iPad",
+  title: "Install VideoJam Player — TV, iPhone & iPad",
   description:
-    "Install Jukebox Player on your Android TV, Fire TV Stick, Chromecast, iPhone, or iPad. Native TV app via Downloader, or add to Home Screen on iOS.",
+    "Install VideoJam Player on your Android TV, Fire TV Stick, Chromecast, iPhone, or iPad. Native TV app via Downloader, or add to Home Screen on iOS.",
 };
 
 export default function DownloadPage() {
@@ -15,7 +15,7 @@ export default function DownloadPage() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600">
             <span aria-hidden>♪</span>
           </span>
-          Jukebox
+          VideoJam
         </Link>
         <Link href="/" className="text-sm text-white/40 hover:text-white/70">
           ← Back
@@ -30,11 +30,11 @@ export default function DownloadPage() {
         <h1 className="text-3xl font-bold md:text-5xl">
           Install{" "}
           <span className="bg-gradient-to-r from-brand-400 to-pink-400 bg-clip-text text-transparent">
-            Jukebox Player
+            VideoJam Player
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-lg text-white/60">
-          Get the full Jukebox experience on your TV, iPhone, or iPad.
+          Get the full VideoJam experience on your TV, iPhone, or iPad.
         </p>
         <div className="mx-auto mt-6 flex flex-wrap justify-center gap-3">
           <a
@@ -56,7 +56,7 @@ export default function DownloadPage() {
       <section id="android-tv" className="mb-10 scroll-mt-8">
         <h2 className="mb-4 text-xl font-bold">Android TV &amp; Fire TV</h2>
         <p className="mb-6 text-sm text-white/60">
-          Install the native Jukebox Player app on your TV using the Downloader app.
+          Install the native VideoJam Player app on your TV using the Downloader app.
         </p>
         <h3 className="mb-4 text-lg font-semibold">What you&apos;ll need</h3>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -84,7 +84,7 @@ export default function DownloadPage() {
             <div>
               <p className="font-semibold">Downloader Code</p>
               <p className="text-xs text-white/50">
-                Enter this code in the Downloader app to install Jukebox
+                Enter this code in the Downloader app to install VideoJam
               </p>
             </div>
           </div>
@@ -216,7 +216,7 @@ export default function DownloadPage() {
                 and press <strong className="text-white/90">Go</strong>.
               </p>
               <p>
-                The Jukebox Player APK will download automatically.
+                The VideoJam Player APK will download automatically.
               </p>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function DownloadPage() {
               </p>
               <p>
                 After installation, open{" "}
-                <strong className="text-white/90">Jukebox Player</strong> from
+                <strong className="text-white/90">VideoJam Player</strong> from
                 your apps list. Enter your party code and you&apos;re live!
               </p>
             </div>
@@ -333,7 +333,7 @@ export default function DownloadPage() {
             iPhone &amp; iPad
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-white/60">
-            Add Jukebox to your Home Screen for a full-screen, app-like experience — no App Store download required.
+            Add VideoJam to your Home Screen for a full-screen, app-like experience — no App Store download required.
           </p>
         </div>
 
@@ -345,12 +345,12 @@ export default function DownloadPage() {
                 1
               </span>
               <h3 className="text-lg font-semibold">
-                Open Jukebox in Safari
+                Open VideoJam in Safari
               </h3>
             </div>
             <div className="ml-11 space-y-3 text-sm text-white/70">
               <p>
-                Navigate to your Jukebox party in{" "}
+                Navigate to your VideoJam party in{" "}
                 <strong className="text-white/90">Safari</strong>. This won&apos;t work from Chrome, Firefox, or in-app browsers — it must be Safari.
               </p>
             </div>
@@ -428,7 +428,7 @@ export default function DownloadPage() {
               <p>
                 Tap{" "}
                 <strong className="text-white/90">Add</strong>{" "}
-                in the top-right corner. Jukebox will appear on your Home Screen as a standalone app — no address bar, no Safari tabs.
+                in the top-right corner. VideoJam will appear on your Home Screen as a standalone app — no address bar, no Safari tabs.
               </p>
             </div>
           </div>
@@ -440,7 +440,7 @@ export default function DownloadPage() {
             <span className="text-2xl">🖥️</span>
             <p className="text-sm font-semibold">Full-screen experience</p>
             <p className="text-xs text-white/50">
-              No address bar or browser chrome — just the jukebox
+              No address bar or browser chrome — just the VideoJam player
             </p>
           </div>
           <div className="card flex flex-col items-center gap-2 p-5 text-center">
@@ -462,9 +462,9 @@ export default function DownloadPage() {
 
       <footer className="text-center text-sm text-white/40">
         <p>
-          Jukebox Player ·{" "}
+          VideoJam Player ·{" "}
           <Link href="/" className="underline hover:text-white/60">
-            Back to Jukebox
+            Back to VideoJam
           </Link>
         </p>
       </footer>

@@ -37,15 +37,15 @@ interface MemStats {
 }
 
 function mem(): MemStats {
-  const g = globalThis as unknown as { __jukeboxStats?: MemStats };
-  if (!g.__jukeboxStats) {
-    g.__jukeboxStats = {
+  const g = globalThis as unknown as { __videojamStats?: MemStats };
+  if (!g.__videojamStats) {
+    g.__videojamStats = {
       viewers: new Map(),
       activity: new Map(),
       ipBans: new Map(),
     };
   }
-  return g.__jukeboxStats;
+  return g.__videojamStats;
 }
 
 function now(): number {

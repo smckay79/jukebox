@@ -1,4 +1,4 @@
-package com.jukebox.player
+package net.videojam.player
 
 import android.os.Bundle
 import android.view.View
@@ -10,10 +10,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
-import com.jukebox.player.data.PartyCodeStore
-import com.jukebox.player.ui.CodeEntryScreen
-import com.jukebox.player.ui.PlayerScreen
-import com.jukebox.player.ui.theme.JukeboxPlayerTheme
+import net.videojam.player.data.PartyCodeStore
+import net.videojam.player.ui.CodeEntryScreen
+import net.videojam.player.ui.PlayerScreen
+import net.videojam.player.ui.theme.VideoJamPlayerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
         val baseUrl = BuildConfig.BASE_URL
 
         setContent {
-            JukeboxPlayerTheme {
+            VideoJamPlayerTheme {
                 val scope = rememberCoroutineScope()
                 val savedCode by store.codeFlow.collectAsState(initial = null)
                 val savedAdminKey by store.adminKeyFlow.collectAsState(initial = null)

@@ -228,7 +228,7 @@ export default function AdminDashboard() {
             href="/"
             className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
           >
-            Jukebox
+            VideoJam
           </Link>
           <h1 className="text-2xl font-bold">Admin Portal</h1>
         </div>

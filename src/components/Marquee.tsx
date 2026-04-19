@@ -51,7 +51,7 @@ export default function Marquee({ text }: { text?: string }) {
       <div
         className="flex whitespace-nowrap font-medium tracking-wide text-white/90"
         style={{
-          animation: "jukebox-marquee 30s linear infinite",
+          animation: "videojam-marquee 30s linear infinite",
           willChange: "transform",
         }}
       >
@@ -75,7 +75,7 @@ export default function Marquee({ text }: { text?: string }) {
         ))}
       </div>
       <style jsx>{`
-        @keyframes jukebox-marquee {
+        @keyframes videojam-marquee {
           from {
             transform: translateX(0);
           }

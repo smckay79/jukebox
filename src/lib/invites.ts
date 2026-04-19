@@ -17,10 +17,10 @@ class MemoryInviteStorage implements InviteStorage {
   private store: Map<string, InviteCode>;
   constructor() {
     const g = globalThis as unknown as {
-      __jukeboxInvites?: Map<string, InviteCode>;
+      __videojamInvites?: Map<string, InviteCode>;
     };
-    if (!g.__jukeboxInvites) g.__jukeboxInvites = new Map();
-    this.store = g.__jukeboxInvites;
+    if (!g.__videojamInvites) g.__videojamInvites = new Map();
+    this.store = g.__videojamInvites;
   }
   async get(code: string) {
     return this.store.get(code.toUpperCase()) ?? null;

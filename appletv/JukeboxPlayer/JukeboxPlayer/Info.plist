@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>JUKEBOX_BASE_URL</key>
-	<string>https://jukebox-delta-three.vercel.app</string>
+	<key>VIDEOJAM_BASE_URL</key>
+	<string>https://videojam.net</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

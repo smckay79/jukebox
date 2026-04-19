@@ -1,4 +1,4 @@
-package com.jukebox.player.data
+package net.videojam.player.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore

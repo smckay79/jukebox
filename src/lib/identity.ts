@@ -3,8 +3,8 @@
 // Stable per-browser identity + display name, stored in localStorage.
 // Used for upvote deduping and "added by" labels.
 
-const USER_ID_KEY = "jukebox.userId";
-const NAME_KEY = "jukebox.displayName";
+const USER_ID_KEY = "videojam.userId";
+const NAME_KEY = "videojam.displayName";
 
 function randomId(): string {
   const bytes = new Uint8Array(12);
@@ -37,7 +37,7 @@ export function setDisplayName(name: string) {
 // Admin keys are stored per-party-code so creators stay authenticated after
 // reload. Guests never have one.
 function adminKeyFor(code: string) {
-  return `jukebox.admin.${code.toUpperCase()}`;
+  return `videojam.admin.${code.toUpperCase()}`;
 }
 
 export function getAdminKey(code: string): string | null {
@@ -56,7 +56,7 @@ export function clearAdminKey(code: string) {
 }
 
 function adminPinFor(code: string) {
-  return `jukebox.pin.${code.toUpperCase()}`;
+  return `videojam.pin.${code.toUpperCase()}`;
 }
 
 export function getAdminPin(code: string): string | null {

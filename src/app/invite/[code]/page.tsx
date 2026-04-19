@@ -94,7 +94,7 @@ export default function InvitePage() {
             This invite code doesn&apos;t exist or has been revoked.
           </p>
           <Link href="/" className="btn-primary inline-block px-6">
-            Go to Jukebox
+            Go to VideoJam
           </Link>
         </div>
       </main>
@@ -109,7 +109,7 @@ export default function InvitePage() {
             <div className="mb-4 text-5xl">🎉</div>
             <h1 className="mb-2 text-2xl font-bold">You&apos;re in!</h1>
             <p className="mb-2 text-white/70">
-              {Math.round(invite.grantDays / 30)} months of Jukebox Pro activated.
+              {Math.round(invite.grantDays / 30)} months of VideoJam Pro activated.
             </p>
             <p className="text-sm text-white/50">
               Thanks to {invite.inviterName} for the invite.
@@ -238,7 +238,7 @@ export default function InvitePage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-white/30">
-          Jukebox — Your party&apos;s group playlist, live from YouTube.
+          VideoJam — Where Everybody Is The VJ!
         </p>
       </div>
     </main>

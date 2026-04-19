@@ -1,6 +1,6 @@
-# Jukebox
+# VideoJam
 
-A group-playlist YouTube jukebox for parties. Host creates a party, guests scan
+Where Everybody Is The VJ! — A live YouTube party playlist. Host creates a party, guests scan
 a QR code to join, everyone adds tracks and upvotes their favorites, the host
 can skip or yank songs.
 
@@ -61,7 +61,7 @@ search-as-you-type for videos, add a **YouTube Data API v3** key:
    **YouTube Data API v3**.
 2. **Credentials → Create credentials → API key**. Restrict it:
    - Application restrictions → **HTTP referrers** → add your Vercel
-     domains (e.g. `https://jukebox-delta-three.vercel.app/*` and any
+     domains (e.g. `https://videojam.net/*` and any
      preview `*.vercel.app`).
    - API restrictions → **YouTube Data API v3** only.
 3. Vercel project → **Settings → Environment Variables** → add
@@ -107,8 +107,8 @@ played, durations, top 5 requesters). Sends go through
    your Resend account email.
 3. Vercel project → **Settings → Environment Variables**:
    - `RESEND_API_KEY` — required to enable email.
-   - `RESEND_FROM` — optional; e.g. `Jukebox <recap@yourdomain.com>`.
-     Defaults to `Jukebox <onboarding@resend.dev>`.
+   - `RESEND_FROM` — optional; e.g. `VideoJam <recap@yourdomain.com>`.
+     Defaults to `VideoJam <onboarding@resend.dev>`.
 4. Redeploy.
 
 Without `RESEND_API_KEY` the end-party flow still works — it just

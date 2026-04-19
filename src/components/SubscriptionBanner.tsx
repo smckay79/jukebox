@@ -17,7 +17,7 @@ export default function SubscriptionBanner({
           <h2 className="mb-2 text-2xl font-bold">Party time is up!</h2>
           <p className="mb-6 text-white/60">
             Free parties are limited to 1 hour. Upgrade to{" "}
-            <span className="font-semibold text-brand-300">Jukebox Pro</span>{" "}
+            <span className="font-semibold text-brand-300">VideoJam Pro</span>{" "}
             for unlimited party time and premium features.
           </p>
           <div className="mb-4 rounded-xl bg-gradient-to-br from-brand-600/30 to-brand-800/20 p-4">

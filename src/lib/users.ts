@@ -40,16 +40,16 @@ class MemoryStorage implements Storage {
   private byOwner: Map<string, Set<string>>;
   constructor() {
     const g = globalThis as unknown as {
-      __jukeboxUsers?: Map<string, User>;
-      __jukeboxPlaylists?: Map<string, SavedPlaylist>;
-      __jukeboxByOwner?: Map<string, Set<string>>;
+      __videojamUsers?: Map<string, User>;
+      __videojamPlaylists?: Map<string, SavedPlaylist>;
+      __videojamByOwner?: Map<string, Set<string>>;
     };
-    if (!g.__jukeboxUsers) g.__jukeboxUsers = new Map();
-    if (!g.__jukeboxPlaylists) g.__jukeboxPlaylists = new Map();
-    if (!g.__jukeboxByOwner) g.__jukeboxByOwner = new Map();
-    this.users = g.__jukeboxUsers;
-    this.playlists = g.__jukeboxPlaylists;
-    this.byOwner = g.__jukeboxByOwner;
+    if (!g.__videojamUsers) g.__videojamUsers = new Map();
+    if (!g.__videojamPlaylists) g.__videojamPlaylists = new Map();
+    if (!g.__videojamByOwner) g.__videojamByOwner = new Map();
+    this.users = g.__videojamUsers;
+    this.playlists = g.__videojamPlaylists;
+    this.byOwner = g.__videojamByOwner;
   }
   async getUser(id: string) {
     return this.users.get(id) ?? null;
@@ -173,9 +173,9 @@ async function addUserToIndex(id: string): Promise<void> {
     await r.sadd("all_user_ids", id);
     return;
   }
-  const g = globalThis as unknown as { __jukeboxUserIndex?: Set<string> };
-  if (!g.__jukeboxUserIndex) g.__jukeboxUserIndex = new Set();
-  g.__jukeboxUserIndex.add(id);
+  const g = globalThis as unknown as { __videojamUserIndex?: Set<string> };
+  if (!g.__videojamUserIndex) g.__videojamUserIndex = new Set();
+  g.__videojamUserIndex.add(id);
 }
 
 export async function getAllUsers(): Promise<User[]> {
@@ -185,12 +185,12 @@ export async function getAllUsers(): Promise<User[]> {
     ids = (await r.smembers("all_user_ids")) as string[];
   } else {
     const g = globalThis as unknown as {
-      __jukeboxUsers?: Map<string, User>;
-      __jukeboxUserIndex?: Set<string>;
+      __videojamUsers?: Map<string, User>;
+      __videojamUserIndex?: Set<string>;
     };
-    const fromMap = g.__jukeboxUsers ? Array.from(g.__jukeboxUsers.keys()) : [];
-    const fromIndex = g.__jukeboxUserIndex
-      ? Array.from(g.__jukeboxUserIndex)
+    const fromMap = g.__videojamUsers ? Array.from(g.__videojamUsers.keys()) : [];
+    const fromIndex = g.__videojamUserIndex
+      ? Array.from(g.__videojamUserIndex)
       : [];
     ids = Array.from(new Set([...fromMap, ...fromIndex]));
   }
@@ -209,9 +209,9 @@ export async function countAllUsers(): Promise<number> {
     return typeof n === "number" ? n : 0;
   }
   const g = globalThis as unknown as {
-    __jukeboxUsers?: Map<string, User>;
+    __videojamUsers?: Map<string, User>;
   };
-  return g.__jukeboxUsers?.size ?? 0;
+  return g.__videojamUsers?.size ?? 0;
 }
 
 export async function updateUserSubscription(

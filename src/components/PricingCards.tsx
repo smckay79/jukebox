@@ -98,7 +98,7 @@ export default function PricingCards() {
           href="/"
           className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
         >
-          Jukebox
+          VideoJam
         </Link>
       </div>
       <h1 className="mb-2 text-3xl font-bold">Pick your plan</h1>

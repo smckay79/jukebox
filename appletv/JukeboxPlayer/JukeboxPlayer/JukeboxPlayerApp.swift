@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct JukeboxPlayerApp: App {
+struct VideoJamPlayerApp: App {
     @StateObject private var store = PartyCodeStore()
 
     var body: some Scene {

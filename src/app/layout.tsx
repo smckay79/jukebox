@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jukebox — queue up YouTube with your friends",
+  title: "VideoJam — Where Everybody Is The VJ!",
   description:
-    "Create a party, share a QR code, and let your friends queue and upvote YouTube music videos in real time.",
+    "Where Everybody Is The VJ! Start a party, share a QR code, and let your friends queue and upvote YouTube music videos in real time.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Jukebox",
+    title: "VideoJam",
   },
   icons: {
     apple: "/icon-192.png",

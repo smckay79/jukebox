@@ -1,4 +1,4 @@
-package com.jukebox.player.ui
+package net.videojam.player.ui
 
 import android.annotation.SuppressLint
 import android.view.KeyEvent

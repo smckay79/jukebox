@@ -16,7 +16,7 @@ export default async function Home() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600">
             <span aria-hidden>♪</span>
           </span>
-          Jukebox
+          VideoJam
         </Link>
         <div className="flex items-center gap-3">
           {showAdmin && (
@@ -33,11 +33,10 @@ export default async function Home() {
 
       <section className="mb-12">
         <h1 className="text-4xl font-bold leading-tight md:text-6xl">
-          Your party&apos;s{" "}
+          Where Everybody{" "}
           <span className="bg-gradient-to-r from-brand-400 to-pink-400 bg-clip-text text-transparent">
-            group playlist
+            Is The VJ!
           </span>
-          , live from YouTube.
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-white/70">
           Start a party, share the QR code, and let anyone in the room queue up
@@ -199,7 +198,7 @@ export default async function Home() {
             <div>
               <p className="font-semibold">Android TV &amp; Fire TV</p>
               <p className="mt-1 text-xs text-white/50">
-                Sideload the native Jukebox Player app on Fire TV Stick, Chromecast, or any Android TV device.
+                Sideload the native VideoJam Player app on Fire TV Stick, Chromecast, or any Android TV device.
               </p>
             </div>
             <Link
@@ -214,7 +213,7 @@ export default async function Home() {
             <div>
               <p className="font-semibold">iPhone &amp; iPad</p>
               <p className="mt-1 text-xs text-white/50">
-                Add Jukebox to your Home Screen for a full-screen app experience — no App Store needed.
+                Add VideoJam to your Home Screen for a full-screen app experience — no App Store needed.
               </p>
             </div>
             <Link
@@ -233,14 +232,14 @@ export default async function Home() {
               </p>
             </div>
             <span className="mt-auto rounded-lg bg-white/5 px-4 py-2 text-sm font-medium text-white/40">
-              Just open jukebox in your browser
+              Just open VideoJam in your browser
             </span>
           </div>
         </div>
       </section>
 
       <footer className="mt-16 text-center text-sm text-white/40">
-        <p>v1 · real-time push &amp; sign-in coming soon. Have fun out there.</p>
+        <p>VideoJam · Where Everybody Is The VJ!</p>
       </footer>
     </main>
   );

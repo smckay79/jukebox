@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Transparent, no action bar. Compose draws everything. The
-         dark background matches the JukeboxDark color scheme so the
+         dark background matches the VideoJamDark color scheme so the
          splash-to-content transition doesn't flash white. -->
-    <style name="Theme.JukeboxPlayer" parent="android:Theme.Material.NoActionBar.Fullscreen">
+    <style name="Theme.VideoJamPlayer" parent="android:Theme.Material.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>

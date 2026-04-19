@@ -1,7 +1,7 @@
 {
-  "name": "Jukebox",
-  "short_name": "Jukebox",
-  "description": "Queue up YouTube with your friends",
+  "name": "VideoJam",
+  "short_name": "VideoJam",
+  "description": "Where Everybody Is The VJ!",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0614",

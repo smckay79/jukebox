@@ -16,9 +16,9 @@ class PartyCodeStore: ObservableObject {
     @Published var history: [RecentParty] = []
 
     private let defaults = UserDefaults.standard
-    private let codeKey = "jukebox_code"
-    private let adminKeyKey = "jukebox_admin_key"
-    private let historyKey = "jukebox_history"
+    private let codeKey = "videojam_code"
+    private let adminKeyKey = "videojam_admin_key"
+    private let historyKey = "videojam_history"
     private let maxHistory = 10
 
     init() {

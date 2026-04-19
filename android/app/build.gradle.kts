@@ -3,17 +3,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// Read the Jukebox web base URL from gradle properties so the same
+// Read the VideoJam web base URL from gradle properties so the same
 // apk can point at staging vs production just by swapping the prop.
-val jukeboxBaseUrl: String = (findProperty("JUKEBOX_BASE_URL") as String?)
-    ?: "https://jukebox-delta-three.vercel.app"
+val videojamBaseUrl: String = (findProperty("VIDEOJAM_BASE_URL") as String?)
+    ?: "https://videojam.net"
 
 android {
-    namespace = "com.jukebox.player"
+    namespace = "net.videojam.player"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.jukebox.player"
+        applicationId = "net.videojam.player"
         // minSdk 26 lets us ship adaptive launcher icons only (no PNG
         // mipmaps needed). Covers all Fire TVs and ~98% of Android
         // devices in the field. Drop to 24 + add PNG mipmaps if an
@@ -25,7 +25,7 @@ android {
 
         // Exposed to Kotlin via BuildConfig.BASE_URL. Wrapped in quotes
         // because buildConfigField literally concatenates into source.
-        buildConfigField("String", "BASE_URL", "\"$jukeboxBaseUrl\"")
+        buildConfigField("String", "BASE_URL", "\"$videojamBaseUrl\"")
     }
 
     buildTypes {

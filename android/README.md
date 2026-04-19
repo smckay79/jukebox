@@ -1,7 +1,7 @@
-# Jukebox Player (Android + Fire TV)
+# VideoJam Player (Android + Fire TV)
 
 A thin, TV-first Android app that points a WebView at a deployed
-Jukebox party's `/display` route. The web app handles rendering
+VideoJam party's `/display` route. The web app handles rendering
 (player, up-next strip, marquee, join QR); this app handles screen-on,
 fullscreen, and remembering the party code across reboots.
 
@@ -28,7 +28,7 @@ android/
 │       └── res/                      — icons, strings, TV banner
 ├── build.gradle.kts                  — plugin versions
 ├── settings.gradle.kts
-└── gradle.properties                 — JUKEBOX_BASE_URL lives here
+└── gradle.properties                 — VIDEOJAM_BASE_URL lives here
 ```
 
 ## Build
@@ -52,15 +52,15 @@ The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ### Pointing at a different backend
 
-By default the app builds against `https://jukebox-delta-three.vercel.app`.
+By default the app builds against `https://videojam.net`.
 Override for a local dev server or staging:
 
 ```bash
-./gradlew :app:assembleDebug -PJUKEBOX_BASE_URL=https://staging.example.com
+./gradlew :app:assembleDebug -PVIDEOJAM_BASE_URL=https://staging.example.com
 ```
 
 or create `gradle.properties.local` next to the root `gradle.properties`
-(it's gitignored) and set `JUKEBOX_BASE_URL=...` there.
+(it's gitignored) and set `VIDEOJAM_BASE_URL=...` there.
 
 > The WebView refuses cleartext HTTP (`android:usesCleartextTraffic="false"`).
 > If you need to point at a plain-HTTP local dev server for testing,

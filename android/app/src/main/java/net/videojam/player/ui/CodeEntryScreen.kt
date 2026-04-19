@@ -1,4 +1,4 @@
-package com.jukebox.player.ui
+package net.videojam.player.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +32,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jukebox.player.data.RecentParty
+import net.videojam.player.data.RecentParty
 
 private const val CODE_LENGTH = 6
 private const val PIN_LENGTH = 4

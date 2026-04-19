@@ -35,7 +35,7 @@ function LoginInner() {
             href="/"
             className="text-xs uppercase tracking-widest text-white/40 hover:text-white/70"
           >
-            Jukebox
+            VideoJam
           </Link>
           <h1 className="mt-1 text-2xl font-bold">Sign in</h1>
           <p className="mt-2 text-sm text-white/60">

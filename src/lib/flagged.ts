@@ -22,10 +22,10 @@ class MemoryFlaggedStorage implements FlaggedStorage {
   private store: Map<string, FlaggedVideo>;
   constructor() {
     const g = globalThis as unknown as {
-      __jukeboxFlagged?: Map<string, FlaggedVideo>;
+      __videojamFlagged?: Map<string, FlaggedVideo>;
     };
-    if (!g.__jukeboxFlagged) g.__jukeboxFlagged = new Map();
-    this.store = g.__jukeboxFlagged;
+    if (!g.__videojamFlagged) g.__videojamFlagged = new Map();
+    this.store = g.__videojamFlagged;
   }
   async get(videoId: string) {
     return this.store.get(videoId) ?? null;
