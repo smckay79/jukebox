@@ -1,6 +1,19 @@
 import type { InviteCode, PartyRecap } from "./types";
 import { formatDuration } from "./recap";
 
+const EMAIL_PALETTES = [
+  { bg: "#2a1608", c1: "#c96f3a", c2: "#8b5a2b", accent: "#f4a261" }, // 70s
+  { bg: "#0f0726", c1: "#ff2bd6", c2: "#00e5ff", accent: "#a855f7" }, // 80s
+  { bg: "#0e1a1b", c1: "#3f7a5e", c2: "#6a4a7a", accent: "#c04c4c" }, // 90s
+  { bg: "#020617", c1: "#3b82f6", c2: "#94a3b8", accent: "#a3e635" }, // 2000s
+  { bg: "#1a0e16", c1: "#ff6b9d", c2: "#c06c84", accent: "#6c5b7b" }, // 2010s
+  { bg: "#1e1033", c1: "#a18cd1", c2: "#fbc2eb", accent: "#ffd3a5" }, // 2020s
+];
+
+function randomPalette() {
+  return EMAIL_PALETTES[Math.floor(Math.random() * EMAIL_PALETTES.length)];
+}
+
 // Thin wrapper around Resend's REST API (https://resend.com/docs). We
 // pick Resend over nodemailer/SMTP because it's a single HTTP call with
 // no deps — matches the rest of this app's "one small fetch" style.
@@ -103,43 +116,44 @@ export async function sendInviteEmail(
 
 function renderInviteHtml(invite: InviteCode, inviteUrl: string): string {
   const months = Math.round(invite.grantDays / 30);
+  const p = randomPalette();
   const messageHtml = invite.message
-    ? `<div style="margin:16px 0;padding:12px 16px;background:#f8f5ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;font-style:italic;color:#444">&ldquo;${esc(invite.message)}&rdquo;</div>`
+    ? `<div style="margin:16px 0;padding:12px 16px;background:${p.bg};border-left:3px solid ${p.accent};border-radius:0 8px 8px 0;font-style:italic;color:#ccc">&ldquo;${esc(invite.message)}&rdquo;</div>`
     : "";
 
   return `<!doctype html>
 <html>
-  <body style="margin:0;padding:0;background:#f5f3fa;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
-    <div style="max-width:520px;margin:0 auto;padding:32px 16px">
-      <div style="background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7e4ef;text-align:center">
-        <div style="background:linear-gradient(135deg,#7c3aed 0%,#ec4899 100%);padding:32px 24px;color:#fff">
-          <img src="https://videojam.net/logo-web.png" alt="VideoJam" style="height:48px;margin-bottom:8px" />
+  <body style="margin:0;padding:0;background:${p.bg};font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#fff">
+    <div style="max-width:620px;margin:0 auto;padding:32px 16px">
+      <div style="background:linear-gradient(160deg,${p.bg} 0%,#000 100%);border-radius:16px;overflow:hidden;border:1px solid ${p.c1}33;text-align:center">
+        <div style="background:linear-gradient(135deg,${p.c1} 0%,${p.c2} 100%);padding:32px 24px;color:#fff">
+          <img src="https://videojam.net/logo-web.png" alt="VideoJam" style="width:600px;max-width:100%;height:auto;margin-bottom:12px" />
           <h1 style="margin:0;font-size:24px;font-weight:700">You&rsquo;re invited!</h1>
           <p style="margin:8px 0 0;font-size:15px;opacity:0.9">${esc(invite.createdByName)} wants you at the party</p>
         </div>
         <div style="padding:28px 24px">
           ${messageHtml}
-          <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px">
-            You&rsquo;ve been personally invited to <strong>VideoJam</strong> &mdash; the live YouTube party playlist.
-            Claim your invite and get <strong>${months} months of VideoJam Pro</strong> free.
+          <p style="color:#ccc;font-size:15px;line-height:1.6;margin:0 0 20px">
+            You&rsquo;ve been personally invited to <strong style="color:#fff">VideoJam</strong> &mdash; the live YouTube party playlist.
+            Claim your invite and get <strong style="color:${p.accent}">${months} months of VideoJam Pro</strong> free.
           </p>
           <div style="margin:24px 0">
-            <a href="${esc(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:#fff;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none">
+            <a href="${esc(inviteUrl)}" style="display:inline-block;background:${p.c1};color:#fff;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none">
               Claim your invite
             </a>
           </div>
-          <div style="margin:20px 0;padding:12px;background:#faf8ff;border-radius:8px">
+          <div style="margin:20px 0;padding:12px;background:${p.bg};border-radius:8px;border:1px solid ${p.c1}33">
             <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Your invite code</div>
-            <div style="font-family:monospace;font-size:24px;font-weight:700;letter-spacing:0.15em;color:#7c3aed">${esc(invite.code)}</div>
+            <div style="font-family:monospace;font-size:24px;font-weight:700;letter-spacing:0.15em;color:${p.accent}">${esc(invite.code)}</div>
           </div>
-          <p style="color:#999;font-size:12px;margin:16px 0 0">
+          <p style="color:#888;font-size:12px;margin:16px 0 0">
             ${invite.maxUses === 1 ? "This invite is just for you." : `This invite can be used ${invite.maxUses === -1 ? "unlimited times" : `up to ${invite.maxUses} times`}.`}
             ${invite.expiresAt ? ` Expires ${new Date(invite.expiresAt).toLocaleDateString()}.` : ""}
           </p>
         </div>
       </div>
-      <p style="color:#999;font-size:11px;text-align:center;margin:16px 0 0">
-        VideoJam &mdash; Where Everybody Is The VJ!&rsquo;s group playlist, live from YouTube.
+      <p style="color:#666;font-size:11px;text-align:center;margin:16px 0 0">
+        VideoJam &mdash; Where Everybody Is The VJ!
       </p>
     </div>
   </body>
