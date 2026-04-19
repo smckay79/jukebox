@@ -32,7 +32,7 @@ export default async function Home() {
             <img
               src="/logo-web.png"
               alt="VideoJam"
-              className="w-[260px] md:w-[500px]"
+              className="w-[90%] md:w-[500px]"
             />
           </Link>
           {/* Desktop-only sign-in */}
