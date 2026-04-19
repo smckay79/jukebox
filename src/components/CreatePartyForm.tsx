@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +10,7 @@ import {
   setAdminPin,
   setDisplayName,
 } from "@/lib/identity";
+import type { PublicUser } from "@/lib/types";
 
 const THEME_OPTIONS = [
   { label: "Dance / Electronic", era: "80s", genre: "electronic" },
@@ -28,10 +30,21 @@ export default function CreatePartyForm() {
   const [themeIdx, setThemeIdx] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<PublicUser | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
 
   useEffect(() => {
     const saved = getDisplayName();
     if (saved) setHost(saved);
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const u = d?.user as PublicUser | null ?? null;
+        setUser(u);
+        if (u && !saved) setHost(u.name.split(" ")[0]);
+        setAuthLoaded(true);
+      })
+      .catch(() => setAuthLoaded(true));
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -52,6 +65,11 @@ export default function CreatePartyForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, theme }),
       });
+      if (res.status === 401) {
+        setError("Please sign in to start a party.");
+        setUser(null);
+        return;
+      }
       if (!res.ok) {
         setError("Couldn't create the party. Try again?");
         return;
@@ -69,6 +87,26 @@ export default function CreatePartyForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!authLoaded) {
+    return <div className="h-40 animate-pulse rounded-lg bg-white/5" />;
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <p className="text-sm text-white/60">
+          Sign in to start a party
+        </p>
+        <Link
+          href="/login?next=/"
+          className="btn-primary inline-block px-6"
+        >
+          Sign in with Google
+        </Link>
+      </div>
+    );
   }
 
   return (
