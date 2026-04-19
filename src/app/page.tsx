@@ -13,12 +13,9 @@ export default async function Home() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <RandomBackground />
-      <header className="mb-10 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-xl font-bold">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-web.png" alt="VideoJam" className="w-[500px]" />
-        </Link>
-        <div className="flex items-center gap-3">
+      {/* Mobile header: sign-in row first, then centered logo */}
+      <header className="mb-10">
+        <div className="flex items-center justify-end gap-3 md:hidden mb-3">
           {showAdmin && (
             <Link
               href="/admin"
@@ -29,16 +26,39 @@ export default async function Home() {
           )}
           <UserMenu nextPath="/" />
         </div>
+        <div className="flex items-center justify-center md:justify-between">
+          <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-web.png"
+              alt="VideoJam"
+              className="w-[260px] md:w-[500px]"
+            />
+          </Link>
+          {/* Desktop-only sign-in */}
+          <div className="hidden md:flex items-center gap-3">
+            {showAdmin && (
+              <Link
+                href="/admin"
+                className="text-sm text-white/40 hover:text-white/70"
+              >
+                Admin
+              </Link>
+            )}
+            <UserMenu nextPath="/" />
+          </div>
+        </div>
       </header>
 
-      <section className="mb-12">
+      <section className="mb-12 text-center md:text-left">
         <h1 className="text-4xl font-bold leading-tight md:text-6xl">
-          Where Everybody{" "}
+          Where Everybody
+          <br />
           <span className="bg-gradient-to-r from-brand-400 to-pink-400 bg-clip-text text-transparent">
             Is The VJ!
           </span>
         </h1>
-        <p className="mt-4 max-w-2xl text-lg text-white/70">
+        <p className="mt-4 max-w-2xl text-lg text-white/70 mx-auto md:mx-0">
           Start a party, share the QR code, and let anyone in the room queue up
           YouTube videos. Upvote the bangers. The host can skip or yank songs.
         </p>
