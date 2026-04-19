@@ -81,7 +81,7 @@ interface AdminSkipBumper {
   enabled: boolean;
 }
 
-type Tab = "overview" | "parties" | "users" | "invites" | "flagged" | "bumpers";
+type Tab = "overview" | "parties" | "users" | "invites" | "waitlist" | "flagged" | "bumpers";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -113,6 +113,7 @@ export default function AdminDashboard() {
   const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [flagged, setFlagged] = useState<AdminFlaggedVideo[]>([]);
   const [skipBumpers, setSkipBumpers] = useState<AdminSkipBumper[]>([]);
+  const [waitlist, setWaitlist] = useState<{ email: string; createdAt: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -181,13 +182,24 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const fetchWaitlist = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/waitlist");
+      if (!res.ok) throw new Error("Failed to load waitlist");
+      const data = await res.json();
+      setWaitlist(data.entries);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchFlagged(), fetchSkipBumpers()]).finally(() =>
+    Promise.all([fetchStats(), fetchParties(), fetchUsers(), fetchInvites(), fetchWaitlist(), fetchFlagged(), fetchSkipBumpers()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchStats, fetchParties, fetchUsers, fetchInvites, fetchFlagged, fetchSkipBumpers]);
+  }, [fetchStats, fetchParties, fetchUsers, fetchInvites, fetchWaitlist, fetchFlagged, fetchSkipBumpers]);
 
   async function endParty(code: string) {
     if (!confirm(`End party ${code}?`)) return;
@@ -245,12 +257,13 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-white/5 p-1">
-        {(["overview", "parties", "users", "invites", "flagged", "bumpers"] as Tab[]).map((t) => {
+        {(["overview", "parties", "users", "invites", "waitlist", "flagged", "bumpers"] as Tab[]).map((t) => {
           const labels: Record<Tab, string> = {
             overview: "Overview",
             parties: `Parties (${parties.length})`,
             users: `Users (${users.length})`,
             invites: `Invites (${invites.length})`,
+            waitlist: `Waitlist (${waitlist.length})`,
             flagged: `Flagged (${flagged.length})`,
             bumpers: `Bumpers (${skipBumpers.length})`,
           };
@@ -282,6 +295,7 @@ export default function AdminDashboard() {
       {tab === "invites" && (
         <InvitesTab invites={invites} onUpdate={fetchInvites} />
       )}
+      {tab === "waitlist" && <WaitlistTab entries={waitlist} />}
       {tab === "flagged" && (
         <FlaggedTab videos={flagged} onUpdate={fetchFlagged} />
       )}
@@ -826,6 +840,51 @@ function InvitesTab({
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WaitlistTab({
+  entries,
+}: {
+  entries: { email: string; createdAt: number }[];
+}) {
+  const sorted = [...entries].sort((a, b) => b.createdAt - a.createdAt);
+
+  function copyAll() {
+    const emails = sorted.map((e) => e.email).join("\n");
+    navigator.clipboard.writeText(emails);
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">
+          Waitlist signups ({entries.length})
+        </h2>
+        {entries.length > 0 && (
+          <button onClick={copyAll} className="btn-ghost text-sm">
+            Copy all emails
+          </button>
+        )}
+      </div>
+      {sorted.length === 0 ? (
+        <p className="text-white/50">No signups yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {sorted.map((e) => (
+            <div
+              key={e.email}
+              className="flex items-center justify-between rounded-lg bg-white/5 px-4 py-2"
+            >
+              <span className="text-sm">{e.email}</span>
+              <span className="text-xs text-white/40">
+                {new Date(e.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
