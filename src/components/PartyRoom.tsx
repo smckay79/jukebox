@@ -489,7 +489,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         <div className="min-w-0">
           <Link href="/">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-web.png" alt="VideoJam" className="h-6" />
+            <img src="/logo-web.png" alt="VideoJam" className="h-8 md:h-10" />
           </Link>
           <h1 className="truncate text-xl font-bold md:text-3xl">
             {party.name}

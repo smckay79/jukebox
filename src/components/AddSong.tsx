@@ -180,6 +180,32 @@ export default function AddSong({
         <h2 className="text-center text-lg font-bold tracking-tight text-white">
           Drop your next banger
         </h2>
+
+        <div className="flex gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            placeholder={
+              searchAvailable
+                ? "Search for a song or paste a YouTube link..."
+                : "Paste a YouTube link to queue it up..."
+            }
+            className="input flex-1"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {urlVideoId ? (
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={!!addingId}
+            >
+              {addingId ? "Adding…" : "Add"}
+            </button>
+          ) : null}
+        </div>
+
         {editingName ? (
           <div className="flex items-end gap-2">
             <div className="flex-1">
@@ -225,31 +251,6 @@ export default function AddSong({
             </button>
           </div>
         )}
-
-        <div className="flex gap-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            placeholder={
-              searchAvailable
-                ? "Search for a song or paste a YouTube link..."
-                : "Paste a YouTube link to queue it up..."
-            }
-            className="input flex-1"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {urlVideoId ? (
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={!!addingId}
-            >
-              {addingId ? "Adding…" : "Add"}
-            </button>
-          ) : null}
-        </div>
       </div>
 
       {showDropdown ? (
