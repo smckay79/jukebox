@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ExportPlaylist from "./ExportPlaylist";
 import { formatDuration } from "@/lib/recap";
 import type { PartyRecap } from "@/lib/types";
 
@@ -80,7 +81,9 @@ export default function PartyEndedView({
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {recap ? <Recap recap={recap} isHost={!!adminKey} /> : null}
+      {recap ? (
+        <Recap recap={recap} isHost={!!adminKey} code={code} adminKey={adminKey} />
+      ) : null}
 
       {!recap && !loading ? (
         <div className="card p-4 text-sm text-white/70">
@@ -100,7 +103,17 @@ export default function PartyEndedView({
   );
 }
 
-function Recap({ recap, isHost }: { recap: PartyRecap; isHost: boolean }) {
+function Recap({
+  recap,
+  isHost,
+  code,
+  adminKey,
+}: {
+  recap: PartyRecap;
+  isHost: boolean;
+  code: string;
+  adminKey: string | null;
+}) {
   const durationMs = recap.endedAt - recap.startedAt;
   const elapsedHrs = Math.max(0, Math.floor(durationMs / 3_600_000));
   const elapsedMins = Math.max(
@@ -186,6 +199,17 @@ function Recap({ recap, isHost }: { recap: PartyRecap; isHost: boolean }) {
           </ul>
         )}
       </section>
+
+      {adminKey && recap.history.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold">Export playlist</h2>
+          <ExportPlaylist
+            code={code}
+            adminKey={adminKey}
+            songCount={new Set(recap.history.map((h) => h.videoId)).size}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
