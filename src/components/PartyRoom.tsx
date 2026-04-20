@@ -511,7 +511,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             {showMobileVideo ? "Hide video" : "Show video"}
           </button>
           <button
-            className="btn-ghost text-sm"
+            className="btn-ghost text-sm md:hidden"
             onClick={() => setShowTVMode(true)}
           >
             📺 TV Mode
