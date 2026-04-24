@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import JoinForm from "@/components/JoinForm";
 
 export default function LandingForm() {
   const router = useRouter();
@@ -46,7 +47,17 @@ export default function LandingForm() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-6">
+      {/* Join an existing party */}
+      <div className="card p-6">
+        <h2 className="mb-2 text-xl font-semibold">Join a party</h2>
+        <p className="mb-4 text-sm text-white/60">
+          Got a party code? Enter it below to jump in.
+        </p>
+        <JoinForm />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
       {/* Waitlist signup */}
       <div className="card p-6">
         <h2 className="mb-2 text-xl font-semibold">Get early access</h2>
@@ -99,6 +110,7 @@ export default function LandingForm() {
             Redeem invite
           </button>
         </form>
+      </div>
       </div>
     </div>
   );
