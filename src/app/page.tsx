@@ -117,7 +117,7 @@ export default async function Home() {
             <CreatePartyForm />
           </div>
         ) : null}
-        <LandingForm />
+        <LandingForm isLoggedIn={!!user} />
       </section>
 
       <footer className="mt-16 text-center text-sm text-white/40">
