@@ -1,6 +1,7 @@
 import Link from "next/link";
 import RandomBackground from "@/components/RandomBackground";
 import LandingForm from "@/components/LandingForm";
+import UserMenu from "@/components/UserMenu";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -12,16 +13,18 @@ export default async function Home() {
     <main className="mx-auto max-w-xl px-4 py-10">
       <RandomBackground />
 
-      {showAdmin && (
-        <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-between">
+        {showAdmin && (
           <Link
             href="/admin"
             className="text-sm text-white/40 hover:text-white/70"
           >
             Admin
           </Link>
-        </div>
-      )}
+        )}
+        {!showAdmin && <div />}
+        <UserMenu nextPath="/" />
+      </div>
 
       <div className="flex justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
