@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAllParties, endParty } from "@/lib/store";
 import { getUser } from "@/lib/users";
 import { sendInactivityCleanupEmail } from "@/lib/email";
+import { isAdminEmail } from "@/lib/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,14 @@ export async function GET(req: Request) {
     for (const party of parties) {
       // Skip if already ended
       if (party.endedAt) continue;
+
+      // Skip if created by an admin (admins can run parties as long as they want)
+      if (party.hostUserId) {
+        const hostUser = await getUser(party.hostUserId);
+        if (hostUser && isAdminEmail(hostUser.email)) {
+          continue;
+        }
+      }
 
       // Skip if created less than 6 hours ago
       const ageMs = now - party.createdAt;
@@ -60,14 +69,14 @@ export async function GET(req: Request) {
 
       // Send email to host if they have an account
       if (party.hostUserId) {
-        const user = await getUser(party.hostUserId);
-        if (user && user.email) {
-          try {
+        try {
+          const user = await getUser(party.hostUserId);
+          if (user && user.email) {
             await sendInactivityCleanupEmail(user.email, party.name, party.code);
-          } catch (err) {
-            console.error(`[cleanup] Failed to send email for party ${party.code}:`, err);
-            // Don't fail the whole job for a single email failure
           }
+        } catch (err) {
+          console.error(`[cleanup] Failed to send email for party ${party.code}:`, err);
+          // Don't fail the whole job for a single email failure
         }
       }
 
