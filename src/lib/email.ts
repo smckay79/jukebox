@@ -347,3 +347,65 @@ function renderRecapText(recap: PartyRecap): string {
   }
   return lines.join("\n");
 }
+
+export async function sendInactivityCleanupEmail(
+  to: string,
+  partyName: string,
+  partyCode: string,
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !to) return;
+
+  const from = process.env.RESEND_FROM || "VideoJam <onboarding@resend.dev>";
+  const subject = `All parties need to end someday 🎉`;
+  const p = randomPalette();
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${p.bg};font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#fff">
+    <div style="max-width:520px;margin:0 auto;padding:32px 16px">
+      <div style="background:linear-gradient(160deg,${p.bg} 0%,#000 100%);border-radius:16px;overflow:hidden;border:1px solid ${p.c1}33">
+        <div style="background:linear-gradient(135deg,${p.c1} 0%,${p.c2} 100%);padding:20px 24px;text-align:center">
+          <img src="https://videojam.net/logo-web.png" alt="VideoJam" style="width:300px;max-width:100%;height:auto" />
+        </div>
+        <div style="padding:24px">
+          <h2 style="margin:0 0 12px;font-size:18px;color:${p.accent}">Party Ended Automatically</h2>
+          <div style="font-size:14px;line-height:1.7;color:#ccc">
+            <p style="margin:0 0 12px">All parties need to end someday 🎉 — it looks like everyone went home and now it's time to clean up. We ended <strong>${esc(partyName)}</strong> (${esc(partyCode)}) for you to help keep VideoJam clean!</p>
+            <p style="margin:12px 0 0;color:#aaa;font-size:13px">This was an automatic cleanup of your party due to inactivity. If you'd like to start another one, just head back to VideoJam and create a new party.</p>
+          </div>
+          <p style="margin:20px 0 0;font-size:11px;color:#666">
+            ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })} ET
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+  const text = `All parties need to end someday 🎉
+
+It looks like everyone went home and now it's time to clean up. We ended "${partyName}" (${partyCode}) for you to help keep VideoJam clean!
+
+This was an automatic cleanup of your party due to inactivity. If you'd like to start another one, just head back to VideoJam and create a new party.`;
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+      cache: "no-store",
+    });
+  } catch {
+    // fire-and-forget — don't break the caller
+  }
+}
