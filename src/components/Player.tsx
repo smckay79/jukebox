@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import MiniQR from "./MiniQR";
+import { useBackgroundAudio } from "@/hooks/useBackgroundAudio";
 import type { Song } from "@/lib/types";
 
 // Minimal typings for the YouTube IFrame API surface we use.
@@ -71,6 +72,7 @@ export default function Player({
   canDownvote = false,
   hasDownvoted = false,
   isHost = false,
+  partyName = "VideoJam Party",
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
@@ -84,6 +86,7 @@ export default function Player({
   canDownvote?: boolean;
   hasDownvoted?: boolean;
   isHost?: boolean;
+  partyName?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -93,6 +96,9 @@ export default function Player({
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
   const [needsTap, setNeedsTap] = useState(false);
+
+  // Keep playback active when app goes to background on mobile
+  useBackgroundAudio(song, playerRef, partyName);
 
   useEffect(() => {
     let cancelled = false;

@@ -81,6 +81,7 @@ export default function TVMode({
             party.nowPlaying?.downvotes?.includes(userId) ?? false
           }
           isHost={isAdmin}
+          partyName={party.name}
         />
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
 
