@@ -584,6 +584,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               canDownvote={isPro && !!party.nowPlaying}
               hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
               isHost={isAdmin}
+              partyName={party.name}
             />
             {isAdmin && party.nowPlaying ? (
               <div className="flex justify-end gap-2">
@@ -766,6 +767,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                 canDownvote={isPro && !!party.nowPlaying}
                 hasDownvoted={party.nowPlaying?.downvotes?.includes(userId) ?? false}
                 isHost={isAdmin}
+                partyName={party.name}
               />
             </div>
 
