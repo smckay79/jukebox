@@ -1,62 +1,89 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Song } from "@/lib/types";
 
-/**
- * Hook to keep party playback active even when the mobile app goes to background
- * or the screen locks. Enables:
- * - Playback continues when app loses focus
- * - Media controls show on lock screen
- * - Prevents accidental pause when screen is locked
- */
 export function useBackgroundAudio(
   song: Song | null,
   playerRef: React.RefObject<any>,
   partyName: string,
 ) {
   const lastStateRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Request a screen wake lock to prevent the device from sleeping.
+  // Wake locks are automatically released when the document becomes hidden,
+  // so we call this on every visibility restore too.
+  const requestWakeLock = useCallback(async () => {
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    try {
+      if (wakeLockRef.current && !wakeLockRef.current.released) return;
+      wakeLockRef.current = await navigator.wakeLock.request("screen");
+    } catch {
+      // Battery saver mode or permission denied — non-fatal
+    }
+  }, []);
+
+  // Acquire wake lock whenever a song is active
+  useEffect(() => {
+    if (!song) return;
+    requestWakeLock();
+  }, [song, requestWakeLock]);
+
+  // Start a near-silent looping audio buffer on the first user gesture.
+  // This registers the page with the iOS audio session, which makes the
+  // Media Session lock-screen controls appear even when the YouTube iframe
+  // is the actual audio source.
+  useEffect(() => {
+    if (!song) return;
+    const start = async () => {
+      if (audioCtxRef.current) return;
+      try {
+        const ctx = new AudioContext();
+        await ctx.resume();
+        const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 0.0001;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.connect(ctx.destination);
+        src.start();
+        audioCtxRef.current = ctx;
+      } catch {
+        /* AudioContext unavailable */
+      }
+    };
+    // pointerdown covers both mouse clicks and touch taps in one event
+    window.addEventListener("pointerdown", start, { once: true });
+    return () => window.removeEventListener("pointerdown", start);
+  }, [song]);
 
   useEffect(() => {
     if (!song || !playerRef.current) return;
 
-    // Setup Media Session API for lock screen controls
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
         artist: song.addedBy,
-        artwork: [
-          {
-            src: song.thumbnail,
-            sizes: "128x128",
-            type: "image/jpeg",
-          },
-        ],
+        artwork: [{ src: song.thumbnail, sizes: "128x128", type: "image/jpeg" }],
       });
 
-      // Prevent the browser from pausing when media controls are used
       navigator.mediaSession.setActionHandler("play", () => {
         playerRef.current?.playVideo();
       });
-
-      navigator.mediaSession.setActionHandler("pause", () => {
-        // Note: don't actually pause — we want to keep playing
-        // This prevents system pause commands from stopping the party
-      });
-
-      navigator.mediaSession.setActionHandler("stop", () => {
-        // Don't stop on system stop command
-      });
+      // Override pause/stop so the system can't stop the party
+      navigator.mediaSession.setActionHandler("pause", () => {});
+      navigator.mediaSession.setActionHandler("stop", () => {});
     }
 
-    // Handle visibility changes — if page becomes visible, resume playback
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.visibilityState === "visible") {
-        // Page came back into focus — resume playback
+        // Wake lock is auto-released on hide — re-acquire it
+        await requestWakeLock();
         try {
-          const state = playerRef.current?.getPlayerState?.();
-          if (state === 2) {
-            // Paused state
+          if (playerRef.current?.getPlayerState?.() === 2) {
             playerRef.current.playVideo();
           }
         } catch {
@@ -65,9 +92,6 @@ export function useBackgroundAudio(
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    // Prevent native pause on page hide (for some browsers)
     const handlePageHide = () => {
       try {
         lastStateRef.current = playerRef.current?.getPlayerState?.();
@@ -76,20 +100,17 @@ export function useBackgroundAudio(
       }
     };
 
-    window.addEventListener("pagehide", handlePageHide);
-
-    // When page becomes visible again, restore playback
-    const handlePageShow = () => {
+    const handlePageShow = async () => {
+      await requestWakeLock();
       try {
-        if (lastStateRef.current !== 0) {
-          // If it wasn't finished, resume
-          playerRef.current?.playVideo();
-        }
+        if (lastStateRef.current !== 0) playerRef.current?.playVideo();
       } catch {
         /* ignore */
       }
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
 
     return () => {
@@ -97,5 +118,13 @@ export function useBackgroundAudio(
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [song, playerRef, partyName]);
+  }, [song, playerRef, requestWakeLock]);
+
+  // Release everything on unmount
+  useEffect(() => {
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+      audioCtxRef.current?.close().catch(() => {});
+    };
+  }, []);
 }
