@@ -5,6 +5,7 @@ import type {
   BannedVideo,
   BumperVideo,
   Party,
+  PartyPlaylist,
   PartyTheme,
   PlaylistTrack,
   PublicParty,
@@ -327,6 +328,9 @@ export async function createParty(
   };
   await persist(party);
   await addPartyToIndex(party.code);
+  if (hostUserId) {
+    await addPartyToUserHistory(hostUserId, party);
+  }
   return party;
 }
 
@@ -949,6 +953,116 @@ async function addPartyToIndex(code: string): Promise<void> {
   const g = globalThis as unknown as { __videojamPartyIndex?: Set<string> };
   if (!g.__videojamPartyIndex) g.__videojamPartyIndex = new Set();
   g.__videojamPartyIndex.add(code.toUpperCase());
+}
+
+// ---------- user party history ----------
+
+export interface PartySnapshot {
+  code: string;
+  name: string;
+  createdAt: number;
+  endedAt?: number;
+  theme?: PartyTheme;
+  bumpers?: BumperVideo[];
+  marquee?: string;
+  playlist?: PartyPlaylist;
+  country?: string;
+}
+
+async function addPartyToUserHistory(userId: string, party: Party): Promise<void> {
+  const r = getRedis();
+  const snapshot: PartySnapshot = {
+    code: party.code,
+    name: party.name,
+    createdAt: party.createdAt,
+    theme: party.theme,
+    bumpers: party.bumpers,
+    marquee: party.marquee,
+    playlist: party.playlist,
+    country: party.country,
+  };
+
+  if (r) {
+    const key = `user:parties:${userId}`;
+    // Get existing history
+    const existing = await r.get<PartySnapshot[]>(key);
+    const parties = (Array.isArray(existing) ? existing : []) as PartySnapshot[];
+    // Add new party at the front
+    parties.unshift(snapshot);
+    // Keep only the last 50 parties
+    if (parties.length > 50) parties.splice(50);
+    // Store back
+    await r.set(key, JSON.stringify(parties));
+    return;
+  }
+
+  // In-memory fallback for development
+  const g = globalThis as unknown as {
+    __videojamUserParties?: Map<string, PartySnapshot[]>;
+  };
+  if (!g.__videojamUserParties) g.__videojamUserParties = new Map();
+  const parties = g.__videojamUserParties.get(userId) ?? [];
+  parties.unshift(snapshot);
+  // Keep only the last 50
+  if (parties.length > 50) parties.pop();
+  g.__videojamUserParties.set(userId, parties);
+}
+
+export async function getUserPartyHistory(userId: string): Promise<PartySnapshot[]> {
+  const r = getRedis();
+  if (r) {
+    const key = `user:parties:${userId}`;
+    const existing = await r.get<PartySnapshot[] | string>(key);
+    if (!existing) return [];
+    try {
+      const parsed = typeof existing === "string" ? JSON.parse(existing) : existing;
+      return Array.isArray(parsed) ? (parsed as PartySnapshot[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  const g = globalThis as unknown as {
+    __videojamUserParties?: Map<string, PartySnapshot[]>;
+  };
+  return g.__videojamUserParties?.get(userId) ?? [];
+}
+
+export async function restorePartySettings(
+  code: string,
+  snapshot: PartySnapshot,
+): Promise<Party | null> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return null;
+
+  // Restore theme
+  if (snapshot.theme) {
+    party.theme = snapshot.theme;
+  }
+
+  // Restore bumpers
+  if (snapshot.bumpers && snapshot.bumpers.length > 0) {
+    party.bumpers = snapshot.bumpers;
+  }
+
+  // Restore marquee
+  if (snapshot.marquee) {
+    party.marquee = snapshot.marquee;
+  }
+
+  // Restore playlist
+  if (snapshot.playlist) {
+    party.playlist = { ...snapshot.playlist, cursor: 0 };
+  }
+
+  // Restore country
+  if (snapshot.country) {
+    party.country = snapshot.country;
+  }
+
+  await persist(party);
+  return party;
 }
 
 export async function listAllPartyCodes(): Promise<string[]> {

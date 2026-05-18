@@ -2,6 +2,7 @@ import Link from "next/link";
 import RandomBackground from "@/components/RandomBackground";
 import LandingForm from "@/components/LandingForm";
 import CreatePartyForm from "@/components/CreatePartyForm";
+import ResurrectPartySection from "@/components/ResurrectPartySection";
 import UserMenu from "@/components/UserMenu";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
@@ -113,13 +114,16 @@ export default async function Home() {
 
       <section className="mt-10 space-y-8">
         {user ? (
-          <div className="card p-6">
-            <h2 className="mb-2 text-xl font-semibold">Start a party</h2>
-            <p className="mb-4 text-sm text-white/60">
-              Create a room and share the QR code with your guests.
-            </p>
-            <CreatePartyForm />
-          </div>
+          <>
+            <div className="card p-6">
+              <h2 className="mb-2 text-xl font-semibold">Start a party</h2>
+              <p className="mb-4 text-sm text-white/60">
+                Create a room and share the QR code with your guests.
+              </p>
+              <CreatePartyForm />
+            </div>
+            <ResurrectPartySection />
+          </>
         ) : null}
         <LandingForm isLoggedIn={!!user} />
       </section>
