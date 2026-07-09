@@ -73,6 +73,7 @@ export default function Player({
   hasDownvoted = false,
   isHost = false,
   partyName = "VideoJam Party",
+  sponsorLogo,
 }: {
   song: Song | null;
   onEnded: (videoId: string) => void;
@@ -87,6 +88,7 @@ export default function Player({
   hasDownvoted?: boolean;
   isHost?: boolean;
   partyName?: string;
+  sponsorLogo?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -279,6 +281,15 @@ export default function Player({
           <div className="pointer-events-none absolute bottom-3 right-3 hidden md:block">
             <MiniQR code={partyCode} size={96} />
           </div>
+        ) : null}
+        {/* Sponsor logo — top-left corner, only in fill/TV mode */}
+        {fill && sponsorLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={sponsorLogo}
+            alt="Sponsor"
+            className="pointer-events-none absolute left-3 top-3 z-10 h-14 max-w-[140px] rounded object-contain opacity-85 drop-shadow-lg"
+          />
         ) : null}
       </div>
       {!fill && song ? (

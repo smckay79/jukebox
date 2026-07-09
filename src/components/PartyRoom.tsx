@@ -53,6 +53,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   // swap the compact now-playing card for a real (smaller) Player.
   const [showMobileVideo, setShowMobileVideo] = useState(false);
   const [showTVMode, setShowTVMode] = useState(false);
+  const [sponsorLogo, setSponsorLogo] = useState<string | null>(null);
   // Presenter / fullscreen mode — triggered by the host for TV casting.
   // We fullscreen only the player-cluster (video + QR overlay + up-next
   // strip + marquee) instead of the whole document so the iframe never
@@ -115,6 +116,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         .catch(() => {});
     }
   }, [initial.code]);
+
+  useEffect(() => {
+    fetch("/api/sponsor-logo")
+      .then((r) => r.json())
+      .then((d: { logo?: string | null }) => { if (d.logo) setSponsorLogo(d.logo); })
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -482,6 +490,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           onDownvote={isPro ? onDownvote : undefined}
           onGoldenDownvote={isAdmin ? onGoldenDownvote : undefined}
           onExit={() => setShowTVMode(false)}
+          sponsorLogo={sponsorLogo ?? undefined}
         />
       ) : null}
       <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">

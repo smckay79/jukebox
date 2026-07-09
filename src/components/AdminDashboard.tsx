@@ -324,6 +324,126 @@ function StatCard({
   );
 }
 
+function SponsorLogoCard() {
+  const [logo, setLogo] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/sponsor-logo")
+      .then((r) => r.json())
+      .then((d: { logo?: string | null }) => setLogo(d.logo ?? null))
+      .catch(() => {});
+  }, []);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 400;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      setLogo(canvas.toDataURL("image/png"));
+      setMsg(null);
+    };
+    img.src = url;
+  }
+
+  async function save() {
+    if (!logo) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/sponsor-logo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ logo }),
+      });
+      const data = await res.json();
+      setMsg(res.ok ? "Saved!" : (data.error ?? "Error saving"));
+    } catch {
+      setMsg("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clear() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await fetch("/api/admin/sponsor-logo", { method: "DELETE" });
+      setLogo(null);
+      setMsg("Cleared.");
+    } catch {
+      setMsg("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card p-4">
+      <h2 className="mb-3 text-lg font-semibold">Sponsor Logo</h2>
+      <p className="mb-4 text-sm text-white/50">
+        Shown in the top-left of the video screen on TV / Android display views.
+        Resize to ~400 px max — the display shows it at 56 px tall.
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logo}
+            alt="Sponsor logo preview"
+            className="h-14 max-w-[180px] rounded bg-white/10 object-contain p-1"
+          />
+        ) : (
+          <div className="flex h-14 w-36 items-center justify-center rounded bg-white/5 text-xs text-white/30">
+            No logo set
+          </div>
+        )}
+        <label className="btn-ghost cursor-pointer text-sm">
+          Upload image
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFile}
+          />
+        </label>
+        {logo && (
+          <>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium transition hover:bg-brand-500 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={clear}
+              disabled={saving}
+              className="btn-ghost text-sm text-red-400 hover:text-red-300"
+            >
+              Clear
+            </button>
+          </>
+        )}
+        {msg && <span className="text-sm text-white/60">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({ stats }: { stats: Stats }) {
   return (
     <div className="space-y-6">
@@ -342,6 +462,8 @@ function OverviewTab({ stats }: { stats: Stats }) {
           sub={formatDuration(stats.totalSecondsPlayed)}
         />
       </div>
+
+      <SponsorLogoCard />
 
       {/* Top Songs */}
       {stats.topSongs.length > 0 && (

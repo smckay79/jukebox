@@ -18,6 +18,7 @@ export default function TVMode({
   onDownvote,
   onGoldenDownvote,
   onExit,
+  sponsorLogo,
 }: {
   party: PublicParty;
   userId: string;
@@ -29,6 +30,7 @@ export default function TVMode({
   onDownvote?: () => void;
   onGoldenDownvote?: () => void;
   onExit: () => void;
+  sponsorLogo?: string;
 }) {
   const qrBg = useMemo(
     () => getQRBackgroundColor(party.theme),
@@ -82,6 +84,7 @@ export default function TVMode({
           }
           isHost={isAdmin}
           partyName={party.name}
+          sponsorLogo={sponsorLogo}
         />
         <div className="pointer-events-auto absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
 
