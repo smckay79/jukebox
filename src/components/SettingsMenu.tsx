@@ -256,6 +256,13 @@ export default function SettingsMenu({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file size before uploading (5MB limit for data URL)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setSponsorErr(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 5MB.`);
+      return;
+    }
+
     setSponsorUploading(true);
     setSponsorErr(null);
 
@@ -275,16 +282,20 @@ export default function SettingsMenu({
             body: JSON.stringify({ imageUrl, title }),
           });
 
-          const data = await res.json().catch(() => ({}));
+          const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
           if (!res.ok) {
-            setSponsorErr((data as { error?: string }).error ?? "Failed to add sponsor");
+            setSponsorErr(data.error ?? "Failed to add sponsor");
+            setSponsorUploading(false);
             return;
           }
 
-          onPartyUpdated((data as { party: PublicParty }).party);
+          if (data.party) {
+            onPartyUpdated(data.party);
+          }
           if (sponsorFileRef.current) sponsorFileRef.current.value = "";
-        } catch {
-          setSponsorErr("Network error");
+        } catch (err) {
+          setSponsorErr("Network error - please try again");
+          console.error("Sponsor upload error:", err);
         } finally {
           setSponsorUploading(false);
         }
@@ -309,16 +320,20 @@ export default function SettingsMenu({
         body: JSON.stringify({ sponsorId }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
       if (!res.ok) {
-        setSponsorErr((data as { error?: string }).error ?? "Failed to remove sponsor");
+        setSponsorErr(data.error ?? "Failed to remove sponsor");
+        setSponsorRemoving(null);
         return;
       }
 
-      onPartyUpdated((data as { party: PublicParty }).party);
-    } catch {
-      setSponsorErr("Network error");
-    } finally {
+      if (data.party) {
+        onPartyUpdated(data.party);
+      }
+      setSponsorRemoving(null);
+    } catch (err) {
+      setSponsorErr("Network error - please try again");
+      console.error("Sponsor removal error:", err);
       setSponsorRemoving(null);
     }
   }

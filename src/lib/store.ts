@@ -860,9 +860,13 @@ export async function addSponsor(
   }
 
   // Validate imageUrl (should be a data URL or valid URL)
+  // Cap at 5MB to account for high-res SVGs and PNGs
   const url = input.imageUrl.trim();
-  if (!url || url.length > 1000000) {
-    return { ok: false, error: "Invalid image URL" };
+  if (!url) {
+    return { ok: false, error: "No image provided" };
+  }
+  if (url.length > 5000000) {
+    return { ok: false, error: "Image too large (max 5MB)" };
   }
 
   party.sponsors.push({
