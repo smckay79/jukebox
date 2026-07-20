@@ -268,11 +268,21 @@ export default function SettingsMenu({
 
     try {
       const reader = new FileReader();
+      reader.onerror = () => {
+        setSponsorErr("Failed to read file");
+        setSponsorUploading(false);
+      };
       reader.onload = async (evt) => {
-        const imageUrl = evt.target?.result as string;
+        const imageUrl = evt.target?.result as string | null;
+        if (!imageUrl) {
+          setSponsorErr("Failed to create image data");
+          setSponsorUploading(false);
+          return;
+        }
         const title = file.name.replace(/\.[^/.]+$/, "").slice(0, 100);
 
         try {
+          console.log("Uploading sponsor:", { title, imageUrlLength: imageUrl.length });
           const res = await fetch(`/api/party/${code}/sponsors/add`, {
             method: "POST",
             headers: {
@@ -281,6 +291,7 @@ export default function SettingsMenu({
             },
             body: JSON.stringify({ imageUrl, title }),
           });
+          console.log("Sponsor upload response:", res.status);
 
           const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
           if (!res.ok) {
