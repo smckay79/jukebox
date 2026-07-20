@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EditPlaylistModal from "./EditPlaylistModal";
+import PlaylistVideoSearchModal from "./PlaylistVideoSearchModal";
 import { getAdminKey } from "@/lib/identity";
 import type {
   PublicParty,
@@ -28,6 +29,14 @@ interface MatchCandidate {
   duration?: string;
   durationSeconds?: number;
   score: number;
+}
+
+interface ManualSelection {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  duration?: string;
 }
 
 const MATCH_CONCURRENCY = 6;
@@ -65,6 +74,10 @@ export default function ImportPlaylist({
   const [matchEnabled, setMatchEnabled] = useState(true);
   const [keepOriginal, setKeepOriginal] = useState<Set<string>>(new Set());
   const [region, setRegion] = useState<string | null>(null);
+  const [manualSelections, setManualSelections] = useState<
+    Map<string, ManualSelection>
+  >(new Map());
+  const [searchingFor, setSearchingFor] = useState<PreviewItem | null>(null);
 
   const matchGen = useRef(0);
 
@@ -331,11 +344,42 @@ export default function ImportPlaylist({
     });
   }
 
+  function handleVideoSelected(result: {
+    videoId: string;
+    title: string;
+    channelTitle: string;
+    thumbnail: string;
+    duration?: string;
+  }) {
+    if (!searchingFor) return;
+    setManualSelections((m) => {
+      const n = new Map(m);
+      n.set(searchingFor.videoId, {
+        videoId: result.videoId,
+        title: result.title,
+        channelTitle: result.channelTitle,
+        thumbnail: result.thumbnail,
+        duration: result.duration,
+      });
+      return n;
+    });
+    setSearchingFor(null);
+  }
+
   function effectiveFor(it: PreviewItem): {
     videoId: string;
     title: string;
     thumbnail: string;
   } {
+    // Prefer manual selection over everything else
+    const manual = manualSelections.get(it.videoId);
+    if (manual) {
+      return {
+        videoId: manual.videoId,
+        title: manual.title,
+        thumbnail: manual.thumbnail,
+      };
+    }
     const m = matches.get(it.videoId);
     if (m && matchEnabled && !keepOriginal.has(it.videoId)) {
       return { videoId: m.videoId, title: m.title, thumbnail: m.thumbnail };
@@ -654,22 +698,34 @@ export default function ImportPlaylist({
                           {shown.channelTitle}
                           {shown.duration ? ` · ${shown.duration}` : ""}
                         </div>
-                        {match && matchEnabled ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {match && matchEnabled ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleUseOriginal(r.videoId)}
+                              className="text-[11px] text-brand-300 underline-offset-2 hover:underline"
+                              title={
+                                usingMatch
+                                  ? `Original: ${r.title}`
+                                  : `Music video: ${match.title}`
+                              }
+                            >
+                              {usingMatch
+                                ? "🎬 Music video · use original"
+                                : "↺ Using original · use music video"}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            onClick={() => toggleUseOriginal(r.videoId)}
-                            className="mt-1 text-[11px] text-brand-300 underline-offset-2 hover:underline"
-                            title={
-                              usingMatch
-                                ? `Original: ${r.title}`
-                                : `Music video: ${match.title}`
-                            }
+                            onClick={() => setSearchingFor(r)}
+                            className="text-[11px] text-white/40 hover:text-white/60"
+                            title="Search for a different video"
                           >
-                            {usingMatch
-                              ? "🎬 Music video · use original"
-                              : "↺ Using original · use music video"}
+                            {manualSelections.has(r.videoId)
+                              ? "✓ Custom video"
+                              : "🔍 Search"}
                           </button>
-                        ) : null}
+                        </div>
                       </div>
                       {badge ? (
                         <span
@@ -728,6 +784,15 @@ export default function ImportPlaylist({
               ),
             );
           }}
+        />
+      ) : null}
+
+      {searchingFor ? (
+        <PlaylistVideoSearchModal
+          songTitle={searchingFor.title}
+          onSelect={handleVideoSelected}
+          onClose={() => setSearchingFor(null)}
+          country={country}
         />
       ) : null}
     </div>
