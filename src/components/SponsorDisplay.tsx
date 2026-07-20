@@ -61,18 +61,6 @@ export default function SponsorDisplay({
             style={{ animation: "fadeIn 0.5s ease-in" }}
           />
         </div>
-        {sponsors.length > 1 && (
-          <div className="flex justify-center gap-1 mt-2">
-            {sponsors.map((_, idx) => (
-              <div
-                key={idx}
-                className={`h-1.5 w-1.5 rounded-full transition-all ${
-                  idx === currentIndex ? "bg-white/80 w-4" : "bg-white/30"
-                }`}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
