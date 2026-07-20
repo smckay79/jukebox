@@ -114,7 +114,11 @@ export default function TVMode({
 
         {/* Rotating sponsor logos — anchored to the bottom of the video,
             just above the marquee. */}
-        <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
+        <SponsorDisplay
+          sponsors={party.sponsors}
+          label={party.sponsorLabel}
+          songKey={party.nowPlaying?.id}
+        />
       </div>
 
       {/* Marquee */}

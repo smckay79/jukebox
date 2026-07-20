@@ -1,29 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Sponsor, SponsorLabel } from "@/lib/types";
-
-const ROTATION_INTERVAL_MS = 5000; // 5 seconds per sponsor
 
 export default function SponsorDisplay({
   sponsors,
   label,
+  songKey,
 }: {
   sponsors?: Sponsor[];
   label?: SponsorLabel;
+  // Identifier for the currently playing song. The logo advances to the
+  // next sponsor each time this changes (i.e. when the song changes).
+  songKey?: string;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const count = sponsors?.length ?? 0;
+  const prevSongKey = useRef<string | undefined>(undefined);
 
-  // Auto-rotate sponsors. Declared before any early return so the hook
-  // order stays stable when the sponsor list appears/disappears.
+  // Advance to the next sponsor whenever the song changes. Declared before
+  // any early return so the hook order stays stable when the list appears/
+  // disappears. The first song seen keeps index 0 (no advance on mount).
   useEffect(() => {
-    if (count <= 1) return;
-    const interval = setInterval(() => {
+    if (count <= 1) {
+      prevSongKey.current = songKey;
+      return;
+    }
+    if (prevSongKey.current === undefined) {
+      prevSongKey.current = songKey;
+      return;
+    }
+    if (songKey !== prevSongKey.current) {
+      prevSongKey.current = songKey;
       setCurrentIndex((prev) => (prev + 1) % count);
-    }, ROTATION_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [count]);
+    }
+  }, [songKey, count]);
 
   // Keep the index in range if the list shrinks below the current index.
   useEffect(() => {
