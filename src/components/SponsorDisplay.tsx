@@ -28,7 +28,7 @@ export default function SponsorDisplay({
   const current = sponsors[currentIndex];
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 mx-auto max-w-xs">
+    <div className="fixed bottom-20 left-4 z-50 pointer-events-none">
       <div className="rounded-lg bg-white/10 backdrop-blur-sm p-3 text-center">
         <div className="text-[11px] uppercase tracking-wider text-white/50 mb-2">
           Sponsor
