@@ -42,7 +42,7 @@ export default function SponsorDisplay({
   const labelOpacity = (label?.brightness ?? 60) / 100;
 
   return (
-    <div className="fixed bottom-20 left-4 z-50 pointer-events-none">
+    <div className="fixed bottom-4 left-4 z-50 pointer-events-none">
       <div className="text-center">
         {labelText ? (
           <div
