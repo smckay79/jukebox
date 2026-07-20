@@ -203,15 +203,15 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
         <div className="pointer-events-none absolute bottom-4 right-4">
           <MiniQR code={party.code} size={96} bgColor={qrBg} />
         </div>
+        {/* Rotating sponsor logos — anchored to the bottom of the video,
+            just above the marquee. */}
+        <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
       </div>
 
       {/* Marquee at the bottom — same text the host set for the web room. */}
       <div className="relative flex-shrink-0">
         <Marquee text={party.marquee} />
       </div>
-
-      {/* Sponsor logos — rotates automatically */}
-      <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
     </div>
   );
 }

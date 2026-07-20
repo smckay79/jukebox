@@ -111,15 +111,16 @@ export default function TVMode({
             ✕ Exit TV Mode
           </button>
         </div>
+
+        {/* Rotating sponsor logos — anchored to the bottom of the video,
+            just above the marquee. */}
+        <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
       </div>
 
       {/* Marquee */}
       <div className="flex-shrink-0">
         <Marquee text={party.marquee} />
       </div>
-
-      {/* Rotating sponsor logos */}
-      <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
     </div>
   );
 }
