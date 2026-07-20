@@ -11,6 +11,7 @@ import type {
   PublicParty,
   Song,
   Sponsor,
+  SponsorLabel,
   SubscriptionTier,
 } from "./types";
 
@@ -185,6 +186,7 @@ export function toPublicParty(
       : undefined,
     bumpers: p.bumpers?.length ? { count: p.bumpers.length } : undefined,
     sponsors: p.sponsors,
+    sponsorLabel: p.sponsorLabel,
     country: p.country,
     endedAt: p.endedAt,
     timeLimit,
@@ -895,6 +897,30 @@ export async function removeSponsor(
 export async function getSponsors(code: string): Promise<Sponsor[]> {
   const party = await storage().get(code.toUpperCase());
   return party?.sponsors ?? [];
+}
+
+export async function setSponsorLabel(
+  code: string,
+  input: SponsorLabel,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  const label: SponsorLabel = {};
+  if (typeof input.text === "string") label.text = input.text.slice(0, 40);
+  if (typeof input.color === "string") {
+    const clean = input.color.trim();
+    // Accept #rgb / #rrggbb only; ignore anything else.
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(clean)) label.color = clean;
+  }
+  if (typeof input.brightness === "number" && !Number.isNaN(input.brightness)) {
+    label.brightness = Math.max(0, Math.min(100, Math.round(input.brightness)));
+  }
+
+  party.sponsorLabel = label;
+  await persist(party);
+  return { ok: true, party };
 }
 
 export async function clearSponsors(

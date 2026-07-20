@@ -119,7 +119,7 @@ export default function TVMode({
       </div>
 
       {/* Rotating sponsor logos */}
-      <SponsorDisplay sponsors={party.sponsors} />
+      <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
     </div>
   );
 }

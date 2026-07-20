@@ -211,7 +211,7 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
       </div>
 
       {/* Sponsor logos — rotates automatically */}
-      <SponsorDisplay sponsors={party.sponsors} />
+      <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
     </div>
   );
 }

@@ -114,9 +114,25 @@ export default function SettingsMenu({
   const [sponsorClearing, setSponsorClearing] = useState(false);
   const sponsorFileRef = useRef<HTMLInputElement>(null);
 
+  // Sponsor label appearance (editable text / color / brightness)
+  const [labelText, setLabelText] = useState(party.sponsorLabel?.text ?? "Sponsor");
+  const [labelColor, setLabelColor] = useState(party.sponsorLabel?.color ?? "#ffffff");
+  const [labelBrightness, setLabelBrightness] = useState(party.sponsorLabel?.brightness ?? 60);
+  const [labelSaving, setLabelSaving] = useState(false);
+  const [labelFlash, setLabelFlash] = useState(false);
+
   useEffect(() => {
     setDraft(marquee ?? "");
   }, [marquee]);
+
+  // Sync label editor from the party each time the settings modal opens,
+  // so it reflects any changes made elsewhere without clobbering edits mid-session.
+  useEffect(() => {
+    if (!open) return;
+    setLabelText(party.sponsorLabel?.text ?? "Sponsor");
+    setLabelColor(party.sponsorLabel?.color ?? "#ffffff");
+    setLabelBrightness(party.sponsorLabel?.brightness ?? 60);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -376,6 +392,43 @@ export default function SettingsMenu({
       setSponsorErr("Network error - please try again");
       console.error("Clear sponsors error:", err);
       setSponsorClearing(false);
+    }
+  }
+
+  async function saveSponsorLabel() {
+    setLabelSaving(true);
+    setSponsorErr(null);
+    try {
+      const res = await fetch(`/api/party/${code}/sponsors/label`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": adminKey,
+        },
+        body: JSON.stringify({
+          text: labelText,
+          color: labelColor,
+          brightness: labelBrightness,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
+      if (!res.ok) {
+        setSponsorErr(data.error ?? "Failed to save label");
+        setLabelSaving(false);
+        return;
+      }
+
+      if (data.party) {
+        onPartyUpdated(data.party);
+      }
+      setLabelFlash(true);
+      setTimeout(() => setLabelFlash(false), 1200);
+      setLabelSaving(false);
+    } catch (err) {
+      setSponsorErr("Network error - please try again");
+      console.error("Save sponsor label error:", err);
+      setLabelSaving(false);
     }
   }
 
@@ -755,6 +808,63 @@ export default function SettingsMenu({
                   </button>
                 </>
               ) : null}
+
+              {/* Label appearance — editable text, font color, brightness */}
+              <div className="mt-3 space-y-2 rounded bg-white/5 p-3">
+                <p className="text-xs font-medium text-white/70">Label</p>
+                <input
+                  type="text"
+                  value={labelText}
+                  onChange={(e) => setLabelText(e.target.value)}
+                  maxLength={40}
+                  placeholder='e.g. "Sponsor" (leave blank to hide)'
+                  className="w-full rounded bg-black/30 px-2 py-1.5 text-sm text-white placeholder:text-white/30 outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs text-white/60">Font color</label>
+                  <input
+                    type="color"
+                    value={labelColor}
+                    onChange={(e) => setLabelColor(e.target.value)}
+                    className="h-7 w-12 cursor-pointer rounded bg-transparent"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-white/60">Brightness</label>
+                    <span className="text-xs text-white/40">{labelBrightness}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={labelBrightness}
+                    onChange={(e) => setLabelBrightness(Number(e.target.value))}
+                    className="w-full cursor-pointer accent-brand-500"
+                  />
+                </div>
+                {/* Live preview */}
+                <div className="flex items-center justify-center rounded bg-black/40 py-2">
+                  {labelText ? (
+                    <span
+                      className="text-[11px] uppercase tracking-wider"
+                      style={{ color: labelColor, opacity: labelBrightness / 100 }}
+                    >
+                      {labelText}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-white/30 italic">Label hidden</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={saveSponsorLabel}
+                  disabled={labelSaving}
+                  className="btn-primary w-full !py-1.5 text-sm"
+                >
+                  {labelSaving ? "Saving…" : labelFlash ? "Saved ✓" : "Save label"}
+                </button>
+              </div>
             </section>
             ) : (
             <section className="mt-5 space-y-1 border-t border-white/10 pt-4">

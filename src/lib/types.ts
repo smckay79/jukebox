@@ -71,6 +71,19 @@ export interface Sponsor {
   addedAt: number;
 }
 
+// Appearance of the label shown above the rotating sponsor logo on the
+// display screens. All fields optional — sensible defaults applied in the UI.
+export interface SponsorLabel {
+  // Text shown above the logo. Empty string hides the label entirely.
+  // Absent = default "Sponsor".
+  text?: string;
+  // Hex font color for the label text (e.g. "#ffffff"). Absent = white.
+  color?: string;
+  // Label brightness as opacity, 0–100. Absent = 60 (matches the old
+  // white/50-ish look).
+  brightness?: number;
+}
+
 export interface PartyPlaylist {
   items: PlaylistTrack[];
   cursor: number; // next track to promote when queue is empty
@@ -104,6 +117,8 @@ export interface Party {
   country?: string;
   // Sponsor logos displayed on the party screen. Rotates automatically.
   sponsors?: Sponsor[];
+  // Appearance of the "Sponsor" label shown above the rotating logo.
+  sponsorLabel?: SponsorLabel;
   // Set when the host ends the party. Once set, the client swaps to the
   // "Party ended" recap view, the queue/nowPlaying are cleared, and new
   // song adds are rejected. The party record itself is kept around until
@@ -146,6 +161,8 @@ export interface PublicParty {
   country?: string;
   // Sponsor logos to display.
   sponsors?: Sponsor[];
+  // Appearance of the "Sponsor" label shown above the rotating logo.
+  sponsorLabel?: SponsorLabel;
   // When set, the party has been ended by the host — the client switches
   // to a recap view.
   endedAt?: number;

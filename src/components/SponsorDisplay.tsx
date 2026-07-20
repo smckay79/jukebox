@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Sponsor } from "@/lib/types";
+import type { Sponsor, SponsorLabel } from "@/lib/types";
 
 const ROTATION_INTERVAL_MS = 5000; // 5 seconds per sponsor
 
 export default function SponsorDisplay({
   sponsors,
+  label,
 }: {
   sponsors?: Sponsor[];
+  label?: SponsorLabel;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const count = sponsors?.length ?? 0;
@@ -34,12 +36,22 @@ export default function SponsorDisplay({
 
   const current = sponsors[currentIndex] ?? sponsors[0];
 
+  // Label appearance — text defaults to "Sponsor"; empty string hides it.
+  const labelText = label?.text ?? "Sponsor";
+  const labelColor = label?.color ?? "#ffffff";
+  const labelOpacity = (label?.brightness ?? 60) / 100;
+
   return (
     <div className="fixed bottom-20 left-4 z-50 pointer-events-none">
       <div className="text-center">
-        <div className="text-[11px] uppercase tracking-wider text-white/50 mb-2">
-          Sponsor
-        </div>
+        {labelText ? (
+          <div
+            className="text-[11px] uppercase tracking-wider mb-2"
+            style={{ color: labelColor, opacity: labelOpacity }}
+          >
+            {labelText}
+          </div>
+        ) : null}
         <div className="relative h-14 flex items-center justify-center">
           <img
             key={current.id}

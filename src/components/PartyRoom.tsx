@@ -788,7 +788,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                   Must be a descendant of presenterRef so it renders on the
                   fullscreen layer. */}
               {presenterMode ? (
-                <SponsorDisplay sponsors={party.sponsors} />
+                <SponsorDisplay sponsors={party.sponsors} label={party.sponsorLabel} />
               ) : null}
             </div>
 
