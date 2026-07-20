@@ -36,24 +36,19 @@ export default function SponsorDisplay({
 
   return (
     <div className="fixed bottom-20 left-4 z-50 pointer-events-none">
-      <div className="rounded-lg bg-white/10 backdrop-blur-sm p-3 text-center">
+      <div className="text-center">
         <div className="text-[11px] uppercase tracking-wider text-white/50 mb-2">
           Sponsor
         </div>
-        <div className="relative h-20 flex items-center justify-center">
+        <div className="relative h-14 flex items-center justify-center">
           <img
             key={current.id}
             src={current.imageUrl}
             alt={current.title || "Sponsor"}
-            className="max-h-20 max-w-full object-contain transition-opacity duration-500"
+            className="max-h-14 max-w-full object-contain transition-opacity duration-500"
             style={{ animation: "fadeIn 0.5s ease-in" }}
           />
         </div>
-        {current.title && (
-          <div className="text-xs text-white/70 mt-2 truncate">
-            {current.title}
-          </div>
-        )}
         {sponsors.length > 1 && (
           <div className="flex justify-center gap-1 mt-2">
             {sponsors.map((_, idx) => (
