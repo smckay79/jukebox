@@ -184,6 +184,7 @@ export function toPublicParty(
       ? { count: p.playlist.items.length, setAt: p.playlist.setAt }
       : undefined,
     bumpers: p.bumpers?.length ? { count: p.bumpers.length } : undefined,
+    sponsors: p.sponsors,
     country: p.country,
     endedAt: p.endedAt,
     timeLimit,
