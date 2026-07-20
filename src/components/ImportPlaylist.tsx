@@ -812,6 +812,7 @@ export default function ImportPlaylist({
         <PartyPlaylistEditor
           code={code}
           adminKey={getAdminKey(code) as string}
+          country={country}
           onClose={() => setShowEditor(false)}
           onSaved={(party) => {
             onImported(party);

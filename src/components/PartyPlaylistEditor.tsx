@@ -8,14 +8,24 @@ import type { PlaylistTrack, PublicParty, Song } from "@/lib/types";
 // tracks and add tracks pulled straight from the party's play history
 // (previously played requests). Saving replaces the background playlist via
 // PUT /api/party/[code]/playlist.
+interface SearchResult {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  duration?: string;
+}
+
 export default function PartyPlaylistEditor({
   code,
   adminKey,
+  country,
   onClose,
   onSaved,
 }: {
   code: string;
   adminKey: string;
+  country?: string;
   onClose: () => void;
   onSaved: (party: PublicParty) => void;
 }) {
@@ -30,6 +40,46 @@ export default function PartyPlaylistEditor({
   // SSR/first render stays consistent.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // YouTube search (same endpoint as the main search box).
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    setSearchError(null);
+    const t = setTimeout(async () => {
+      try {
+        const qs = new URLSearchParams({ q });
+        if (country) qs.set("country", country);
+        const res = await fetch(`/api/search?${qs.toString()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const d = (await res.json().catch(() => ({}))) as { error?: string };
+          setSearchError(d.error ?? "Search failed");
+          setSearchResults([]);
+          return;
+        }
+        const data = (await res.json()) as { results?: SearchResult[] };
+        setSearchResults(data.results ?? []);
+      } catch {
+        setSearchError("Network error");
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, country]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +176,15 @@ export default function PartyPlaylistEditor({
       else n.add(videoId);
       return n;
     });
+  }
+
+  function addTrack(t: PlaylistTrack) {
+    if (inPlaylist.has(t.videoId)) return;
+    setItems((arr) => [
+      ...arr,
+      { videoId: t.videoId, title: t.title, thumbnail: t.thumbnail },
+    ]);
+    setDirty(true);
   }
 
   function addPicked() {
@@ -273,6 +332,71 @@ export default function PartyPlaylistEditor({
                     ))}
                   </ul>
                 )}
+              </div>
+
+              {/* Search YouTube to add */}
+              <div className="border-t border-white/10 pt-3">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                  Search YouTube to add
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for a song, artist, or video…"
+                  className="input w-full !py-1.5 text-sm"
+                />
+                {searchError ? (
+                  <p className="mt-1 text-xs text-red-400">{searchError}</p>
+                ) : null}
+                {searchQuery.trim() ? (
+                  <ul className="mt-2 max-h-[35vh] space-y-1 overflow-auto">
+                    {searching && searchResults.length === 0 ? (
+                      <li className="p-2 text-center text-xs text-white/50">
+                        Searching…
+                      </li>
+                    ) : searchResults.length === 0 ? (
+                      <li className="p-2 text-center text-xs text-white/50">
+                        No results found
+                      </li>
+                    ) : (
+                      searchResults.map((r) => {
+                        const already = inPlaylist.has(r.videoId);
+                        return (
+                          <li
+                            key={r.videoId}
+                            className="flex items-center gap-2 rounded bg-white/5 p-1.5 text-xs"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={r.thumbnail}
+                              alt=""
+                              className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="break-words text-white/90">
+                                {r.title}
+                              </div>
+                              <div className="truncate text-white/50">
+                                {r.channelTitle}
+                                {r.duration ? ` · ${r.duration}` : ""}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => addTrack(r)}
+                              disabled={already}
+                              className="btn-primary flex-shrink-0 !px-2 !py-1 text-xs disabled:opacity-40"
+                              title={already ? "Already in playlist" : "Add to playlist"}
+                            >
+                              {already ? "Added" : "Add"}
+                            </button>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                ) : null}
               </div>
 
               {/* Add from play history */}
