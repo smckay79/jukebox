@@ -860,12 +860,12 @@ export async function addSponsor(
   }
 
   // Validate imageUrl (should be a data URL or valid URL)
-  // Cap at 5MB to account for high-res SVGs and PNGs
+  // Cap at ~6.7MB (5MB file + base64 encoding overhead ~33%)
   const url = input.imageUrl.trim();
   if (!url) {
     return { ok: false, error: "No image provided" };
   }
-  if (url.length > 5000000) {
+  if (url.length > 6700000) {
     return { ok: false, error: "Image too large (max 5MB)" };
   }
 
