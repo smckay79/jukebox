@@ -180,7 +180,7 @@ export default function PartyPlaylistEditor({
       onClick={attemptClose}
     >
       <div
-        className="card relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden p-0"
+        className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#161225] p-0 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
