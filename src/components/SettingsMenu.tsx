@@ -111,6 +111,7 @@ export default function SettingsMenu({
   const [sponsorUploading, setSponsorUploading] = useState(false);
   const [sponsorErr, setSponsorErr] = useState<string | null>(null);
   const [sponsorRemoving, setSponsorRemoving] = useState<string | null>(null);
+  const [sponsorClearing, setSponsorClearing] = useState(false);
   const sponsorFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -347,6 +348,37 @@ export default function SettingsMenu({
       setSponsorErr("Network error - please try again");
       console.error("Sponsor removal error:", err);
       setSponsorRemoving(null);
+    }
+  }
+
+  async function clearAllSponsors() {
+    if (!confirm("Remove all sponsors?")) return;
+    setSponsorClearing(true);
+    setSponsorErr(null);
+    try {
+      const res = await fetch(`/api/party/${code}/sponsors/clear`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": adminKey,
+        },
+      });
+
+      const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
+      if (!res.ok) {
+        setSponsorErr(data.error ?? "Failed to clear sponsors");
+        setSponsorClearing(false);
+        return;
+      }
+
+      if (data.party) {
+        onPartyUpdated(data.party);
+      }
+      setSponsorClearing(false);
+    } catch (err) {
+      setSponsorErr("Network error - please try again");
+      console.error("Clear sponsors error:", err);
+      setSponsorClearing(false);
     }
   }
 
@@ -690,31 +722,41 @@ export default function SettingsMenu({
                 {(party.sponsors?.length ?? 0)}/10 sponsors
               </p>
               {(party.sponsors?.length ?? 0) > 0 ? (
-                <ul className="space-y-2 mt-2">
-                  {party.sponsors!.map((sponsor) => (
-                    <li
-                      key={sponsor.id}
-                      className="flex items-center gap-2 rounded bg-white/5 p-2"
-                    >
-                      <img
-                        src={sponsor.imageUrl}
-                        alt={sponsor.title || "Sponsor"}
-                        className="h-8 w-auto flex-shrink-0 rounded"
-                      />
-                      <div className="min-w-0 flex-1 text-xs text-white/70 truncate">
-                        {sponsor.title || "Sponsor"}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeSponsor(sponsor.id)}
-                        disabled={sponsorRemoving === sponsor.id}
-                        className="rounded bg-white/10 px-2 py-1 text-white/70 hover:bg-red-600/60 hover:text-white text-xs"
+                <>
+                  <ul className="space-y-2 mt-2">
+                    {party.sponsors!.map((sponsor) => (
+                      <li
+                        key={sponsor.id}
+                        className="flex items-center gap-2 rounded bg-white/5 p-2"
                       >
-                        {sponsorRemoving === sponsor.id ? "…" : "✕"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        <img
+                          src={sponsor.imageUrl}
+                          alt={sponsor.title || "Sponsor"}
+                          className="h-8 w-auto flex-shrink-0 rounded"
+                        />
+                        <div className="min-w-0 flex-1 text-xs text-white/70 truncate">
+                          {sponsor.title || "Sponsor"}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeSponsor(sponsor.id)}
+                          disabled={sponsorRemoving === sponsor.id}
+                          className="rounded bg-white/10 px-2 py-1 text-white/70 hover:bg-red-600/60 hover:text-white text-xs"
+                        >
+                          {sponsorRemoving === sponsor.id ? "…" : "✕"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={clearAllSponsors}
+                    disabled={sponsorClearing}
+                    className="btn-ghost w-full !py-1 text-xs text-red-400 hover:bg-red-600/20 mt-2"
+                  >
+                    {sponsorClearing ? "Clearing…" : "Clear all"}
+                  </button>
+                </>
               ) : null}
             </section>
             ) : (

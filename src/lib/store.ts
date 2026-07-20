@@ -897,6 +897,17 @@ export async function getSponsors(code: string): Promise<Sponsor[]> {
   return party?.sponsors ?? [];
 }
 
+export async function clearSponsors(
+  code: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  party.sponsors = [];
+  await persist(party);
+  return { ok: true, party };
+}
+
 // Pass `null` (or an empty string) to clear and fall back to auto-detection.
 // Anything else must be ISO 3166-1 alpha-2 — two letters, no digits — or we
 // reject. We don't validate against a specific list because YouTube may add
