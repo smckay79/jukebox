@@ -77,7 +77,11 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
       es.onmessage = (ev) => {
         try {
           const next = JSON.parse(ev.data) as PublicParty;
-          setParty(next);
+          // SSE updates don't include static fields like sponsors — preserve from prev state
+          setParty((prev) => ({
+            ...next,
+            sponsors: next.sponsors ?? prev.sponsors,
+          }));
         } catch {
           /* ignore malformed frame */
         }
