@@ -7,14 +7,14 @@ import { useEffect, useRef, useState } from "react";
 // a song yet). They double as a call-to-action to get guests adding tracks.
 // One is shown per song, advancing when the song changes.
 const DEFAULT_FILLERS = [
-  "Silence is golden, but music is better.",
-  "No requests yet — scan the QR and be the first!",
-  "Your song could be playing next. Add it!",
-  "Grab your phone, scan the code, pick a banger.",
-  "This is just the warm-up. Request your favorite.",
-  "Keep the party going — add a song!",
-  "The DJ booth is open. Scan to queue a track.",
-  "Great playlists are built by the crowd. Add yours.",
+  "Silence is golden, but music is better — scan the QR code to start!",
+  "No requests yet — scan the QR code and be the first!",
+  "Your song could be playing next — scan the QR code to add it!",
+  "Grab your phone, scan the QR code, and pick a banger!",
+  "This is just the warm-up — scan the QR code to request your favorite!",
+  "Keep the party going — scan the QR code to add a song!",
+  "The DJ booth is open — scan the QR code to queue a track!",
+  "Great playlists are built by the crowd — scan the QR code to add yours!",
 ];
 
 // Scrolling ticker that sits inline below the video. We render the text
