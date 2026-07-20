@@ -12,7 +12,10 @@ export default function SponsorDisplay({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  console.log("SponsorDisplay received sponsors:", sponsors?.length ?? 0, sponsors?.map(s => ({ id: s.id, title: s.title, hasImage: !!s.imageUrl })));
+
   if (!sponsors || sponsors.length === 0) {
+    console.log("SponsorDisplay: no sponsors, returning null");
     return null;
   }
 

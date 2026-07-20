@@ -34,6 +34,9 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
   const partyRef = useRef(party);
   partyRef.current = party;
+
+  // Debug: log sponsors on mount
+  console.log("DisplayView mounted with sponsors:", initial.sponsors?.length ?? 0);
   // Stable random theme for when the party has no theme set
   const [fallbackTheme] = useState<PartyTheme>(() => ({
     era: ERAS[Math.floor(Math.random() * ERAS.length)].id,
@@ -78,10 +81,14 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
         try {
           const next = JSON.parse(ev.data) as PublicParty;
           // SSE updates don't include static fields like sponsors — preserve from prev state
-          setParty((prev) => ({
-            ...next,
-            sponsors: next.sponsors ?? prev.sponsors,
-          }));
+          setParty((prev) => {
+            const updated = {
+              ...next,
+              sponsors: next.sponsors ?? prev.sponsors,
+            };
+            console.log("DisplayView update:", { sponsors: updated.sponsors?.length, hasSponsorData: !!updated.sponsors });
+            return updated;
+          });
         } catch {
           /* ignore malformed frame */
         }
