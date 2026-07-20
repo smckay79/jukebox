@@ -10,6 +10,7 @@ import type {
   PlaylistTrack,
   PublicParty,
   Song,
+  Sponsor,
   SubscriptionTier,
 } from "./types";
 
@@ -837,6 +838,58 @@ export async function getBumpers(
 ): Promise<BumperVideo[]> {
   const party = await storage().get(code.toUpperCase());
   return party?.bumpers ?? [];
+}
+
+// ---------- sponsors ----------
+
+export async function addSponsor(
+  code: string,
+  input: {
+    imageUrl: string;
+    title?: string;
+  },
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  if (!party.sponsors) party.sponsors = [];
+
+  // Cap at 10 sponsors
+  if (party.sponsors.length >= 10) {
+    return { ok: false, error: "Maximum 10 sponsors allowed" };
+  }
+
+  // Validate imageUrl (should be a data URL or valid URL)
+  const url = input.imageUrl.trim();
+  if (!url || url.length > 1000000) {
+    return { ok: false, error: "Invalid image URL" };
+  }
+
+  party.sponsors.push({
+    id: makeId(),
+    imageUrl: url,
+    title: (input.title ?? "").slice(0, 100) || undefined,
+    addedAt: Date.now(),
+  });
+  await persist(party);
+  return { ok: true, party };
+}
+
+export async function removeSponsor(
+  code: string,
+  sponsorId: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  party.sponsors = (party.sponsors ?? []).filter((sp) => sp.id !== sponsorId);
+  await persist(party);
+  return { ok: true, party };
+}
+
+export async function getSponsors(code: string): Promise<Sponsor[]> {
+  const party = await storage().get(code.toUpperCase());
+  return party?.sponsors ?? [];
 }
 
 // Pass `null` (or an empty string) to clear and fall back to auto-detection.

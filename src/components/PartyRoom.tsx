@@ -17,6 +17,7 @@ import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
+import SponsorManager from "./SponsorManager";
 import SubscriptionBanner from "./SubscriptionBanner";
 import TVMode from "./TVMode";
 import UserMenu from "./UserMenu";
@@ -697,6 +698,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               banned={party.banned}
               onUnban={onUnban}
               onBanUrl={onBanUrl}
+            />
+            <SponsorManager
+              code={party.code}
+              adminKey={adminKey}
+              party={party}
+              onUpdated={setParty}
             />
           </>
         ) : null}

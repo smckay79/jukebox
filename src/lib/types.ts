@@ -64,6 +64,13 @@ export interface BumperVideo {
   triggerMatch?: string;
 }
 
+export interface Sponsor {
+  id: string; // unique identifier
+  imageUrl: string; // data URL of the logo
+  title?: string; // optional sponsor name
+  addedAt: number;
+}
+
 export interface PartyPlaylist {
   items: PlaylistTrack[];
   cursor: number; // next track to promote when queue is empty
@@ -95,6 +102,8 @@ export interface Party {
   // imports are filtered to videos playable in this country — overriding
   // the auto-detected region from the request. Absent = use auto-detect.
   country?: string;
+  // Sponsor logos displayed on the party screen. Rotates automatically.
+  sponsors?: Sponsor[];
   // Set when the host ends the party. Once set, the client swaps to the
   // "Party ended" recap view, the queue/nowPlaying are cleared, and new
   // song adds are rejected. The party record itself is kept around until
@@ -135,6 +144,8 @@ export interface PublicParty {
   // See Party.country — exposed so the admin settings menu can show the
   // current selection, and so the guest client can attach it to search.
   country?: string;
+  // Sponsor logos to display.
+  sponsors?: Sponsor[];
   // When set, the party has been ended by the host — the client switches
   // to a recap view.
   endedAt?: number;

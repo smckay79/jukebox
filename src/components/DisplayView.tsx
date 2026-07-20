@@ -5,6 +5,7 @@ import Background from "./Background";
 import Marquee from "./Marquee";
 import MiniQR from "./MiniQR";
 import Player from "./Player";
+import SponsorDisplay from "./SponsorDisplay";
 import { ERAS, GENRES, getQRBackgroundColor } from "@/lib/background";
 import type { PartyTheme, PublicParty } from "@/lib/types";
 
@@ -33,7 +34,6 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
   const [party, setParty] = useState<PublicParty>(initial);
   const partyRef = useRef(party);
   partyRef.current = party;
-  const [sponsorLogo, setSponsorLogo] = useState<string | null>(null);
   // Stable random theme for when the party has no theme set
   const [fallbackTheme] = useState<PartyTheme>(() => ({
     era: ERAS[Math.floor(Math.random() * ERAS.length)].id,
@@ -45,13 +45,6 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
     () => getQRBackgroundColor(party.theme),
     [party.theme],
   );
-
-  useEffect(() => {
-    fetch("/api/sponsor-logo")
-      .then((r) => r.json())
-      .then((d) => { if (d.logo) setSponsorLogo(d.logo); })
-      .catch(() => {});
-  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -199,7 +192,6 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
           downvotes={party.nowPlaying?.downvotes?.length ?? 0}
           goldenSkip={party.nowPlaying?.goldenSkip ?? false}
           partyName={party.name}
-          sponsorLogo={sponsorLogo ?? undefined}
         />
         {/* Bottom gradient covers YouTube's end-screen cards/links so
             they're neither visible nor clickable on the TV display. */}
@@ -213,6 +205,9 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
       <div className="relative flex-shrink-0">
         <Marquee text={party.marquee} />
       </div>
+
+      {/* Sponsor logos — rotates automatically */}
+      <SponsorDisplay sponsors={party.sponsors} />
     </div>
   );
 }
