@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ThemePicker from "./ThemePicker";
-import type { PartyTheme } from "@/lib/types";
+import type { PartyTheme, PublicParty, Sponsor } from "@/lib/types";
 
 interface MatchSearchResult {
   title: string;
@@ -49,24 +49,32 @@ export default function SettingsMenu({
   marquee,
   country,
   bumperCount,
+  code,
+  adminKey,
+  party,
   onSetTheme,
   onSetMarquee,
   onSetCountry,
   onAddBumper,
   onRemoveBumper,
   onListBumpers,
+  onPartyUpdated,
   isPro = true,
 }: {
   theme?: PartyTheme;
   marquee?: string;
   country?: string;
   bumperCount?: number;
+  code: string;
+  adminKey: string;
+  party: PublicParty;
   onSetTheme: (next: PartyTheme | null) => Promise<string | null>;
   onSetMarquee: (text: string) => Promise<string | null>;
   onSetCountry: (next: string | null) => Promise<string | null>;
   onAddBumper: (url: string, triggerType?: "random" | "match", triggerMatch?: string) => Promise<string | null>;
   onRemoveBumper: (videoId: string) => Promise<string | null>;
   onListBumpers: () => Promise<BumperEntry[]>;
+  onPartyUpdated: (party: PublicParty) => void;
   isPro?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -98,6 +106,12 @@ export default function SettingsMenu({
   const [bumpers, setBumpers] = useState<BumperEntry[]>([]);
   const [bumpersLoaded, setBumpersLoaded] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Sponsor state
+  const [sponsorUploading, setSponsorUploading] = useState(false);
+  const [sponsorErr, setSponsorErr] = useState<string | null>(null);
+  const [sponsorRemoving, setSponsorRemoving] = useState<string | null>(null);
+  const sponsorFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setDraft(marquee ?? "");
@@ -236,6 +250,77 @@ export default function SettingsMenu({
     await onRemoveBumper(videoId);
     setBumpers((prev) => prev.filter((b) => b.videoId !== videoId));
     setRemovingId(null);
+  }
+
+  async function handleSponsorFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSponsorUploading(true);
+    setSponsorErr(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const imageUrl = evt.target?.result as string;
+        const title = file.name.replace(/\.[^/.]+$/, "").slice(0, 100);
+
+        try {
+          const res = await fetch(`/api/party/${code}/sponsors/add`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-admin-key": adminKey,
+            },
+            body: JSON.stringify({ imageUrl, title }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setSponsorErr((data as { error?: string }).error ?? "Failed to add sponsor");
+            return;
+          }
+
+          onPartyUpdated((data as { party: PublicParty }).party);
+          if (sponsorFileRef.current) sponsorFileRef.current.value = "";
+        } catch {
+          setSponsorErr("Network error");
+        } finally {
+          setSponsorUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setSponsorErr("Failed to read file");
+      setSponsorUploading(false);
+    }
+  }
+
+  async function removeSponsor(sponsorId: string) {
+    setSponsorRemoving(sponsorId);
+    setSponsorErr(null);
+    try {
+      const res = await fetch(`/api/party/${code}/sponsors/remove`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": adminKey,
+        },
+        body: JSON.stringify({ sponsorId }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSponsorErr((data as { error?: string }).error ?? "Failed to remove sponsor");
+        return;
+      }
+
+      onPartyUpdated((data as { party: PublicParty }).party);
+    } catch {
+      setSponsorErr("Network error");
+    } finally {
+      setSponsorRemoving(null);
+    }
   }
 
   return (
@@ -546,6 +631,75 @@ export default function SettingsMenu({
               </h3>
               <p className="text-xs text-white/40">
                 Upgrade to add short clips that play between songs.
+              </p>
+            </section>
+            )}
+
+            {isPro ? (
+            <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Sponsors
+              </h3>
+              <p className="text-xs text-white/50">
+                Upload logos that rotate on the party display screen.
+              </p>
+              {sponsorErr && <p className="text-xs text-red-400">{sponsorErr}</p>}
+              <button
+                type="button"
+                onClick={() => sponsorFileRef.current?.click()}
+                disabled={sponsorUploading || (party.sponsors?.length ?? 0) >= 10}
+                className="btn-primary w-full !py-2 text-sm"
+              >
+                {sponsorUploading ? "Uploading…" : "Upload logo"}
+              </button>
+              <input
+                ref={sponsorFileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleSponsorFileSelect}
+                className="hidden"
+              />
+              <p className="text-xs text-white/40">
+                {(party.sponsors?.length ?? 0)}/10 sponsors
+              </p>
+              {(party.sponsors?.length ?? 0) > 0 ? (
+                <ul className="space-y-2 mt-2">
+                  {party.sponsors!.map((sponsor) => (
+                    <li
+                      key={sponsor.id}
+                      className="flex items-center gap-2 rounded bg-white/5 p-2"
+                    >
+                      <img
+                        src={sponsor.imageUrl}
+                        alt={sponsor.title || "Sponsor"}
+                        className="h-8 w-auto flex-shrink-0 rounded"
+                      />
+                      <div className="min-w-0 flex-1 text-xs text-white/70 truncate">
+                        {sponsor.title || "Sponsor"}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSponsor(sponsor.id)}
+                        disabled={sponsorRemoving === sponsor.id}
+                        className="rounded bg-white/10 px-2 py-1 text-white/70 hover:bg-red-600/60 hover:text-white text-xs"
+                      >
+                        {sponsorRemoving === sponsor.id ? "…" : "✕"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+            ) : (
+            <section className="mt-5 space-y-1 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white/80">
+                Sponsors
+                <span className="ml-2 rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                  Pro
+                </span>
+              </h3>
+              <p className="text-xs text-white/40">
+                Upgrade to display rotating sponsor logos on the party screen.
               </p>
             </section>
             )}

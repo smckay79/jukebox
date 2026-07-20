@@ -17,7 +17,6 @@ import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
-import SponsorManager from "./SponsorManager";
 import SubscriptionBanner from "./SubscriptionBanner";
 import TVMode from "./TVMode";
 import UserMenu from "./UserMenu";
@@ -539,12 +538,16 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               marquee={party.marquee}
               country={party.country}
               bumperCount={party.bumpers?.count ?? 0}
+              code={party.code}
+              adminKey={adminKey}
+              party={party}
               onSetTheme={onSetTheme}
               onSetMarquee={onSetMarquee}
               onSetCountry={onSetCountry}
               onAddBumper={onAddBumper}
               onRemoveBumper={onRemoveBumper}
               onListBumpers={onListBumpers}
+              onPartyUpdated={setParty}
               isPro={isPro}
             />
           ) : null}
@@ -698,12 +701,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               banned={party.banned}
               onUnban={onUnban}
               onBanUrl={onBanUrl}
-            />
-            <SponsorManager
-              code={party.code}
-              adminKey={adminKey}
-              party={party}
-              onUpdated={setParty}
             />
           </>
         ) : null}
