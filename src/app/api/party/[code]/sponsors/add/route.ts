@@ -46,6 +46,6 @@ export async function POST(
     );
   }
 
-  const tier = await getHostTier(params.code);
+  const tier = await getHostTier(result.party);
   return NextResponse.json({ ok: true, party: toPublicParty(result.party, tier) });
 }
