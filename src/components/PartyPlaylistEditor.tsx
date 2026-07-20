@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PlaylistTrack, PublicParty, Song } from "@/lib/types";
 
 // Admin modal for editing the party's background playlist: reorder / remove
@@ -25,6 +26,10 @@ export default function PartyPlaylistEditor({
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Portal target only exists on the client — gate the portal on mount so
+  // SSR/first render stays consistent.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,7 +179,9 @@ export default function PartyPlaylistEditor({
     onClose();
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
       onClick={attemptClose}
@@ -347,6 +354,7 @@ export default function PartyPlaylistEditor({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
