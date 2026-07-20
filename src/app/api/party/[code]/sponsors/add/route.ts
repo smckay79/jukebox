@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyAdmin } from "@/lib/store";
-import { addSponsor } from "@/lib/store";
+import { verifyAdmin, addSponsor, toPublicParty } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,5 +46,5 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ ok: true, party: result.party });
+  return NextResponse.json({ ok: true, party: toPublicParty(result.party) });
 }
