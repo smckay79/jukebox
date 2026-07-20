@@ -11,24 +11,28 @@ export default function SponsorDisplay({
   sponsors?: Sponsor[];
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const count = sponsors?.length ?? 0;
 
-  console.log("SponsorDisplay received sponsors:", sponsors?.length ?? 0, sponsors?.map(s => ({ id: s.id, title: s.title, hasImage: !!s.imageUrl })));
+  // Auto-rotate sponsors. Declared before any early return so the hook
+  // order stays stable when the sponsor list appears/disappears.
+  useEffect(() => {
+    if (count <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % count);
+    }, ROTATION_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [count]);
+
+  // Keep the index in range if the list shrinks below the current index.
+  useEffect(() => {
+    if (currentIndex >= count && count > 0) setCurrentIndex(0);
+  }, [count, currentIndex]);
 
   if (!sponsors || sponsors.length === 0) {
-    console.log("SponsorDisplay: no sponsors, returning null");
     return null;
   }
 
-  // Auto-rotate sponsors
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % sponsors.length);
-    }, ROTATION_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [sponsors.length]);
-
-  const current = sponsors[currentIndex];
+  const current = sponsors[currentIndex] ?? sponsors[0];
 
   return (
     <div className="fixed bottom-20 left-4 z-50 pointer-events-none">

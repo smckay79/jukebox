@@ -283,7 +283,6 @@ export default function SettingsMenu({
         const title = file.name.replace(/\.[^/.]+$/, "").slice(0, 100);
 
         try {
-          console.log("Uploading sponsor:", { title, imageUrlLength: imageUrl.length });
           const res = await fetch(`/api/party/${code}/sponsors/add`, {
             method: "POST",
             headers: {
@@ -292,10 +291,8 @@ export default function SettingsMenu({
             },
             body: JSON.stringify({ imageUrl, title }),
           });
-          console.log("Sponsor upload response:", res.status);
 
           const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
-          console.log("Sponsor API error data:", data);
           if (!res.ok) {
             setSponsorErr(data.error ?? "Failed to add sponsor");
             setSponsorUploading(false);

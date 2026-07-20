@@ -17,6 +17,7 @@ import Player from "./Player";
 import QRCard from "./QRCard";
 import Queue from "./Queue";
 import SettingsMenu from "./SettingsMenu";
+import SponsorDisplay from "./SponsorDisplay";
 import SubscriptionBanner from "./SubscriptionBanner";
 import TVMode from "./TVMode";
 import UserMenu from "./UserMenu";
@@ -163,6 +164,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             ...next,
             hostTier: next.hostTier ?? prev.hostTier,
             timeLimit: next.timeLimit ?? prev.timeLimit,
+            sponsors: next.sponsors ?? prev.sponsors,
           }));
         } catch {
           /* ignore malformed frame */
@@ -782,6 +784,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                 isHost={isAdmin}
                 partyName={party.name}
               />
+              {/* Rotating sponsor logos — only in fullscreen presenter mode.
+                  Must be a descendant of presenterRef so it renders on the
+                  fullscreen layer. */}
+              {presenterMode ? (
+                <SponsorDisplay sponsors={party.sponsors} />
+              ) : null}
             </div>
 
             {/* Compact up-next strip shown only while fullscreened so the

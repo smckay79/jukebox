@@ -28,21 +28,18 @@ export async function POST(
   }
 
   if (!body.imageUrl) {
-    console.error("Sponsor add: missing imageUrl");
     return NextResponse.json(
       { error: "missing-image" },
       { status: 400 },
     );
   }
 
-  console.log("Sponsor add: imageUrl length:", body.imageUrl.length, "title:", body.title);
   const result = await addSponsor(params.code, {
     imageUrl: body.imageUrl,
     title: body.title,
   });
 
   if (!result.ok) {
-    console.error("Sponsor add failed:", result.error);
     return NextResponse.json(
       { error: result.error },
       { status: 400 },

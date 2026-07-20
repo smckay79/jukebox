@@ -3,6 +3,7 @@
 import Marquee from "./Marquee";
 import MiniQR from "./MiniQR";
 import Player from "./Player";
+import SponsorDisplay from "./SponsorDisplay";
 import { getQRBackgroundColor } from "@/lib/background";
 import { useMemo } from "react";
 import type { PublicParty } from "@/lib/types";
@@ -116,6 +117,9 @@ export default function TVMode({
       <div className="flex-shrink-0">
         <Marquee text={party.marquee} />
       </div>
+
+      {/* Rotating sponsor logos */}
+      <SponsorDisplay sponsors={party.sponsors} />
     </div>
   );
 }
