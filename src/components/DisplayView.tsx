@@ -214,7 +214,11 @@ export default function DisplayView({ initial }: { initial: PublicParty }) {
 
       {/* Marquee at the bottom — same text the host set for the web room. */}
       <div className="relative flex-shrink-0">
-        <Marquee text={party.marquee} />
+        <Marquee
+          text={party.marquee}
+          useFiller={party.queue.length === 0}
+          songKey={party.nowPlaying?.id}
+        />
       </div>
     </div>
   );

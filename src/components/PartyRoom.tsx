@@ -635,7 +635,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onBan={onBan}
           />
         )}
-        <Marquee text={party.marquee} />
+        <Marquee
+          text={party.marquee}
+          useFiller={party.queue.length === 0}
+          songKey={party.nowPlaying?.id}
+        />
         {showQR ? <QRCard code={party.code} /> : null}
         <AddSong
           code={party.code}
@@ -825,7 +829,11 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               </div>
             ) : null}
 
-            <Marquee text={party.marquee} />
+            <Marquee
+              text={party.marquee}
+              useFiller={party.queue.length === 0}
+              songKey={party.nowPlaying?.id}
+            />
 
             <div
               className={

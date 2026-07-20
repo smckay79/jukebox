@@ -123,7 +123,11 @@ export default function TVMode({
 
       {/* Marquee */}
       <div className="flex-shrink-0">
-        <Marquee text={party.marquee} />
+        <Marquee
+          text={party.marquee}
+          useFiller={party.queue.length === 0}
+          songKey={party.nowPlaying?.id}
+        />
       </div>
     </div>
   );
