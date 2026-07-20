@@ -294,6 +294,7 @@ export default function SettingsMenu({
           console.log("Sponsor upload response:", res.status);
 
           const data = (await res.json().catch(() => ({ error: "Unknown error" }))) as { error?: string; party?: PublicParty };
+          console.log("Sponsor API error data:", data);
           if (!res.ok) {
             setSponsorErr(data.error ?? "Failed to add sponsor");
             setSponsorUploading(false);
