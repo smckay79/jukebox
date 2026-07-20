@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyAdmin, addSponsor, toPublicParty } from "@/lib/store";
+import { verifyAdmin, addSponsor, toPublicParty, getHostTier } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,5 +46,6 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ ok: true, party: toPublicParty(result.party) });
+  const tier = await getHostTier(params.code);
+  return NextResponse.json({ ok: true, party: toPublicParty(result.party, tier) });
 }
