@@ -788,6 +788,66 @@ export async function clearPartyPlaylist(
   return { ok: true, party };
 }
 
+// Read the current background playlist's items (admin editor uses this to
+// populate the edit view). Returns [] when no playlist is set, null when the
+// party doesn't exist.
+export async function getPartyPlaylistItems(
+  code: string,
+): Promise<PlaylistTrack[] | null> {
+  const party = await storage().get(code.toUpperCase());
+  if (!party) return null;
+  return party.playlist?.items ?? [];
+}
+
+// Replace the background playlist's items wholesale (used by the admin
+// editor for reorder / remove / add-from-history). An empty list clears the
+// playlist. Tries to keep the loop cursor roughly where it was so a light
+// edit doesn't restart the loop from the top.
+export async function replacePartyPlaylist(
+  code: string,
+  items: PlaylistTrack[],
+): Promise<{ ok: true; party: Party; count: number } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+
+  const clean: PlaylistTrack[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    const vid = (it.videoId ?? "").toString().trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) continue;
+    if (seen.has(vid)) continue;
+    seen.add(vid);
+    clean.push({
+      videoId: vid,
+      title: (it.title || "YouTube video").toString().slice(0, 200),
+      thumbnail:
+        (it.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`)
+          .toString()
+          .slice(0, 500),
+    });
+    if (clean.length >= PLAYLIST_MAX) break;
+  }
+
+  if (clean.length === 0) {
+    // Empty save = clear the background playlist.
+    party.playlist = undefined;
+    if (isPlaylistTrack(party.nowPlaying)) {
+      party.nowPlaying = null;
+      promoteNext(party);
+    }
+    await persist(party);
+    return { ok: true, party, count: 0 };
+  }
+
+  const prevCursor = party.playlist?.cursor ?? 0;
+  const cursor = prevCursor < clean.length ? prevCursor : 0;
+  party.playlist = { items: clean, cursor, setAt: Date.now() };
+  if (!party.nowPlaying) promoteNext(party);
+  await persist(party);
+  return { ok: true, party, count: clean.length };
+}
+
 // ---------- bumper videos ----------
 
 export async function addBumper(

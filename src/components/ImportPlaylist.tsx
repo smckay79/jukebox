@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EditPlaylistModal from "./EditPlaylistModal";
+import PartyPlaylistEditor from "./PartyPlaylistEditor";
 import PlaylistVideoSearchModal from "./PlaylistVideoSearchModal";
 import { getAdminKey } from "@/lib/identity";
 import type {
@@ -59,6 +60,7 @@ export default function ImportPlaylist({
   refreshKey?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
   const [raw, setRaw] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -467,6 +469,16 @@ export default function ImportPlaylist({
       </button>
       {open ? (
         <div className="mt-3 space-y-3">
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => setShowEditor(true)}
+              className="btn-ghost w-full !py-2 text-sm"
+              title="Reorder or remove tracks, and add previously played songs"
+            >
+              ✎ Edit current playlist / add from history
+            </button>
+          ) : null}
           {authUser ? (
             <div className="rounded-lg bg-white/5 p-2">
               <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-white/50">
@@ -793,6 +805,18 @@ export default function ImportPlaylist({
           onSelect={handleVideoSelected}
           onClose={() => setSearchingFor(null)}
           country={country}
+        />
+      ) : null}
+
+      {showEditor && getAdminKey(code) ? (
+        <PartyPlaylistEditor
+          code={code}
+          adminKey={getAdminKey(code) as string}
+          onClose={() => setShowEditor(false)}
+          onSaved={(party) => {
+            onImported(party);
+            setFlash("Party playlist updated.");
+          }}
         />
       ) : null}
     </div>
