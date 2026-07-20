@@ -11,6 +11,8 @@ export default function ResurrectPartySection() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<PartySnapshot[]>([]);
   const [resurrecting, setResurrecting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     loadPartyHistory();
@@ -86,6 +88,28 @@ export default function ResurrectPartySection() {
     }
   }
 
+  async function deleteParty(code: string) {
+    setDeleting(code);
+    setError(null);
+    try {
+      const res = await fetch("/api/party/history/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        setError("Couldn't delete party");
+        setDeleting(null);
+        return;
+      }
+      setHistory(history.filter((p) => p.code !== code));
+      setConfirmDelete(null);
+    } catch {
+      setError("Network error");
+      setDeleting(null);
+    }
+  }
+
   if (loading) {
     return null;
   }
@@ -108,6 +132,8 @@ export default function ResurrectPartySection() {
       <div className="space-y-2">
         {history.map((party) => {
           const ago = formatAgo(party.createdAt);
+          const isDeleting = deleting === party.code;
+          const showConfirm = confirmDelete === party.code;
           return (
             <div
               key={party.code}
@@ -119,14 +145,46 @@ export default function ResurrectPartySection() {
                   {ago} · Code: {party.code}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => resurrectParty(party.code)}
-                disabled={resurrecting === party.code}
-                className="btn-primary ml-3 !px-3 !py-1 text-sm whitespace-nowrap"
-              >
-                {resurrecting === party.code ? "Creating…" : "Resurrect"}
-              </button>
+              <div className="ml-3 flex gap-2 whitespace-nowrap">
+                {showConfirm ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => deleteParty(party.code)}
+                      disabled={isDeleting}
+                      className="text-sm text-red-400 hover:text-red-300"
+                    >
+                      {isDeleting ? "Deleting…" : "Confirm"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(null)}
+                      className="text-sm text-white/60 hover:text-white/80"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => resurrectParty(party.code)}
+                      disabled={resurrecting === party.code}
+                      className="btn-primary !px-3 !py-1 text-sm"
+                    >
+                      {resurrecting === party.code ? "Creating…" : "Resurrect"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(party.code)}
+                      className="text-sm text-white/40 hover:text-white/60"
+                      title="Delete from history"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           );
         })}

@@ -1028,6 +1028,45 @@ export async function getUserPartyHistory(userId: string): Promise<PartySnapshot
   return g.__videojamUserParties?.get(userId) ?? [];
 }
 
+export async function deletePartyFromHistory(
+  userId: string,
+  partyCode: string,
+): Promise<boolean> {
+  const r = getRedis();
+  if (r) {
+    const key = `user:parties:${userId}`;
+    const existing = await r.get<PartySnapshot[] | string>(key);
+    if (!existing) return false;
+    try {
+      const parsed = typeof existing === "string" ? JSON.parse(existing) : existing;
+      const parties = (Array.isArray(parsed) ? parsed : []) as PartySnapshot[];
+      const filtered = parties.filter((p) => p.code !== partyCode);
+      if (filtered.length === parties.length) return false; // Not found
+      if (filtered.length === 0) {
+        await r.del(key);
+      } else {
+        await r.set(key, JSON.stringify(filtered));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const g = globalThis as unknown as {
+    __videojamUserParties?: Map<string, PartySnapshot[]>;
+  };
+  const parties = g.__videojamUserParties?.get(userId);
+  if (!parties) return false;
+  const idx = parties.findIndex((p) => p.code === partyCode);
+  if (idx === -1) return false;
+  parties.splice(idx, 1);
+  if (parties.length === 0) {
+    g.__videojamUserParties?.delete(userId);
+  }
+  return true;
+}
+
 export async function restorePartySettings(
   code: string,
   snapshot: PartySnapshot,
