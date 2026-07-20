@@ -527,6 +527,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
           >
             📺 TV Mode
           </button>
+          <button
+            className="btn-ghost text-sm hidden md:inline-flex"
+            onClick={enterPresenter}
+            title="Expand the video to fill the screen (Esc to exit)"
+          >
+            <span aria-hidden>⛶</span> Fullscreen
+          </button>
           <AddToHomeScreen />
           <button
             className="btn-ghost text-sm"
@@ -827,21 +834,12 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                   : "flex gap-2"
               }
             >
-              {!presenterMode ? (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={enterPresenter}
-                  title="Expand the video to fill the screen (Esc to exit)"
-                >
-                  <span aria-hidden>⛶</span> Fullscreen
-                </button>
-              ) : (
+              {presenterMode ? (
                 <>
                   {isAdmin ? (
                     <button
                       type="button"
-                      className="btn-primary !px-3 !py-1.5 text-sm"
+                      className="btn-primary !px-2 !py-1 text-xs"
                       onClick={onSkip}
                       disabled={!party.nowPlaying}
                       title="Skip current track"
@@ -851,13 +849,13 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                   ) : null}
                   <button
                     type="button"
-                    className="btn-ghost !px-3 !py-1.5 text-sm"
+                    className="btn-ghost !px-2 !py-1 text-xs"
                     onClick={exitPresenter}
                   >
                     Exit fullscreen
                   </button>
                 </>
-              )}
+              ) : null}
             </div>
           </div>
           {isAdmin ? (
