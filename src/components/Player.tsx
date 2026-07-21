@@ -11,6 +11,7 @@ type YTPlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   destroy: () => void;
+  mute: () => void;
   unMute: () => void;
   isMuted: () => boolean;
   getPlayerState: () => number;
@@ -98,6 +99,9 @@ export default function Player({
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
   const [needsTap, setNeedsTap] = useState(false);
+  // Video is playing but was auto-muted because the browser blocked
+  // autoplay-with-sound — we show a one-tap "unmute" prompt.
+  const [needsUnmute, setNeedsUnmute] = useState(false);
 
   // Keep playback active when app goes to background on mobile
   useBackgroundAudio(song, playerRef, partyName);
@@ -124,6 +128,7 @@ export default function Player({
         wrapRef.current.appendChild(mount);
 
         setNeedsTap(false);
+        setNeedsUnmute(false);
         playerRef.current = new window.YT.Player(mount, {
           videoId: song.videoId,
           width: "100%",
@@ -160,11 +165,32 @@ export default function Player({
 
         // Check after a beat whether the browser blocked autoplay.
         // State -1 = unstarted, 5 = cued — both mean it didn't start.
+        // Browsers block autoplay *with sound* on a fresh page load, so if
+        // that happened we mute and retry — muted autoplay is always allowed
+        // — and surface a one-tap "unmute" prompt instead of a dead
+        // "click to play" screen. The video still starts on its own.
         setTimeout(() => {
           if (cancelled) return;
           try {
-            const st = playerRef.current?.getPlayerState();
-            if (st === -1 || st === 5) setNeedsTap(true);
+            const p = playerRef.current;
+            if (!p) return;
+            const st = p.getPlayerState();
+            if (st === -1 || st === 5) {
+              p.mute();
+              p.playVideo();
+              setNeedsUnmute(true);
+              // If even muted playback didn't kick in, fall back to a tap.
+              setTimeout(() => {
+                if (cancelled) return;
+                try {
+                  const st2 = playerRef.current?.getPlayerState();
+                  if (st2 === -1 || st2 === 5) {
+                    setNeedsUnmute(false);
+                    setNeedsTap(true);
+                  }
+                } catch { /* destroyed */ }
+              }, 1200);
+            }
           } catch { /* destroyed */ }
         }, 1500);
       } else if (
@@ -233,6 +259,24 @@ export default function Player({
             <span className="text-sm font-medium text-white/80">
               Click to play
             </span>
+          </button>
+        ) : null}
+        {/* Playing but muted (autoplay-with-sound was blocked) — one tap to
+            turn the sound on. Non-blocking so the video plays behind it. */}
+        {song && needsUnmute ? (
+          <button
+            type="button"
+            className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur transition hover:bg-black"
+            onClick={() => {
+              try {
+                playerRef.current?.unMute();
+                playerRef.current?.playVideo();
+              } catch { /* destroyed */ }
+              setNeedsUnmute(false);
+            }}
+          >
+            <span className="text-base">🔊</span>
+            <span>Tap for sound</span>
           </button>
         ) : null}
         {/* Golden skip overlay — dramatic full-screen golden X */}
