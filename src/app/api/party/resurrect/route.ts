@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { getUserPartyHistory, createParty, restorePartySettings } from "@/lib/store";
+import { getUserPartyHistory, resurrectParty } from "@/lib/store";
 import { getSubscriptionInfo } from "@/lib/subscription";
 
 export const runtime = "nodejs";
@@ -52,14 +52,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const newParty = await createParty(
-    snapshot.name,
-    user.id,
-    snapshot.theme,
-  );
-
-  // Restore all the settings from the snapshot
-  await restorePartySettings(newParty.code, snapshot);
+  // Rebuild the party from the snapshot: same code (identical QR), restored
+  // theme / marquee / country / bumpers / sponsors, and a background playlist
+  // seeded with the original loop plus every song added that night.
+  const newParty = await resurrectParty(user.id, snapshot);
 
   return NextResponse.json({
     code: newParty.code,

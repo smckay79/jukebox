@@ -120,6 +120,10 @@ async function persist(party: Party): Promise<void> {
   await storage().set(party);
   // Best-effort: publish failure is not fatal, the poll will fill the gap.
   await publishPartyUpdate(party.code, toPublicParty(party));
+  // Keep the host's resurrect snapshot roughly current (throttled) so an
+  // old party can be brought back with its full state — playlist, songs
+  // added that night, bumpers, sponsors, settings. Best-effort.
+  await snapshotHostParty(party);
 }
 
 // ---------- helpers ----------
@@ -332,9 +336,8 @@ export async function createParty(
   };
   await persist(party);
   await addPartyToIndex(party.code);
-  if (hostUserId) {
-    await addPartyToUserHistory(hostUserId, party);
-  }
+  // persist() already writes the initial (empty) resurrect snapshot for
+  // hosted parties; it's refreshed as the night goes on.
   return party;
 }
 
@@ -1044,6 +1047,11 @@ export async function endParty(
   if (party.nowPlaying && !isInterstitial(party.nowPlaying)) {
     pushHistory(party, finalizePlayed(party.nowPlaying));
   }
+  // Snapshot the FULL night (playlist, sponsors, settings, every song added)
+  // before we tear down the live state below — otherwise resurrection would
+  // only see the emptied party. Forced write also bumps the throttle so the
+  // post-clear persist() below won't overwrite this good snapshot.
+  await snapshotHostParty(party, true);
   party.nowPlaying = null;
   party.queue = [];
   party.playlist = undefined;
@@ -1122,31 +1130,65 @@ export interface PartySnapshot {
   marquee?: string;
   playlist?: PartyPlaylist;
   country?: string;
+  // Sponsor logos + the customizable label appearance.
+  sponsors?: Sponsor[];
+  sponsorLabel?: SponsorLabel;
+  // Every song added that night (played / now playing / still queued),
+  // deduped by videoId and excluding bumpers. Used to seed the resurrected
+  // party's background playlist so the whole night's music comes back.
+  playedTracks?: PlaylistTrack[];
 }
 
-async function addPartyToUserHistory(userId: string, party: Party): Promise<void> {
-  const r = getRedis();
-  const snapshot: PartySnapshot = {
+// Capture the full current state of a party for resurrection. Grabs settings,
+// playlist, bumpers, sponsors AND the songs added that night.
+function buildPartySnapshot(party: Party): PartySnapshot {
+  const played: PlaylistTrack[] = [];
+  const seen = new Set<string>();
+  const consider = (s: Song | null | undefined) => {
+    if (!s || s.source === "bumper") return;
+    const vid = s.videoId;
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return;
+    if (seen.has(vid)) return;
+    seen.add(vid);
+    played.push({ videoId: vid, title: s.title, thumbnail: s.thumbnail });
+  };
+  for (const s of party.history) consider(s);
+  consider(party.nowPlaying);
+  for (const s of party.queue) consider(s);
+
+  return {
     code: party.code,
     name: party.name,
     createdAt: party.createdAt,
+    endedAt: party.endedAt,
     theme: party.theme,
     bumpers: party.bumpers,
     marquee: party.marquee,
     playlist: party.playlist,
     country: party.country,
+    sponsors: party.sponsors,
+    sponsorLabel: party.sponsorLabel,
+    playedTracks: played.slice(0, 200),
   };
+}
 
+// Insert or update this party's snapshot in the host's resurrect history
+// (replaces the existing entry by code so re-snapshotting doesn't duplicate).
+async function upsertPartyToUserHistory(userId: string, party: Party): Promise<void> {
+  const snapshot = buildPartySnapshot(party);
+  const r = getRedis();
   if (r) {
     const key = `user:parties:${userId}`;
-    // Get existing history
-    const existing = await r.get<PartySnapshot[]>(key);
-    const parties = (Array.isArray(existing) ? existing : []) as PartySnapshot[];
-    // Add new party at the front
-    parties.unshift(snapshot);
-    // Keep only the last 50 parties
+    const existing = await r.get<PartySnapshot[] | string>(key);
+    let parties: PartySnapshot[] = [];
+    if (existing) {
+      const parsed = typeof existing === "string" ? JSON.parse(existing) : existing;
+      parties = (Array.isArray(parsed) ? parsed : []) as PartySnapshot[];
+    }
+    const idx = parties.findIndex((p) => p.code === snapshot.code);
+    if (idx >= 0) parties[idx] = snapshot;
+    else parties.unshift(snapshot);
     if (parties.length > 50) parties.splice(50);
-    // Store back
     await r.set(key, JSON.stringify(parties));
     return;
   }
@@ -1157,10 +1199,27 @@ async function addPartyToUserHistory(userId: string, party: Party): Promise<void
   };
   if (!g.__videojamUserParties) g.__videojamUserParties = new Map();
   const parties = g.__videojamUserParties.get(userId) ?? [];
-  parties.unshift(snapshot);
-  // Keep only the last 50
-  if (parties.length > 50) parties.pop();
+  const idx = parties.findIndex((p) => p.code === snapshot.code);
+  if (idx >= 0) parties[idx] = snapshot;
+  else parties.unshift(snapshot);
+  if (parties.length > 50) parties.splice(50);
   g.__videojamUserParties.set(userId, parties);
+}
+
+// Throttled snapshot used from persist(): at most once per SNAPSHOT_THROTTLE_MS
+// per party, so hot mutations (votes, polls) don't hammer the history store.
+// Pass force=true (end/resurrect) to write immediately. Best-effort.
+const SNAPSHOT_THROTTLE_MS = 15_000;
+function snapshotHostParty(party: Party, force = false): Promise<void> {
+  if (!party.hostUserId) return Promise.resolve();
+  const g = globalThis as unknown as { __vjSnapAt?: Record<string, number> };
+  if (!g.__vjSnapAt) g.__vjSnapAt = {};
+  const now = Date.now();
+  if (!force && now - (g.__vjSnapAt[party.code] ?? 0) < SNAPSHOT_THROTTLE_MS) {
+    return Promise.resolve();
+  }
+  g.__vjSnapAt[party.code] = now;
+  return upsertPartyToUserHistory(party.hostUserId, party).catch(() => {});
 }
 
 export async function getUserPartyHistory(userId: string): Promise<PartySnapshot[]> {
@@ -1256,6 +1315,79 @@ export async function restorePartySettings(
   }
 
   await persist(party);
+  return party;
+}
+
+// Bring an old party back to life from a saved snapshot. Restores EVERYTHING:
+// the same join code (so the QR is identical), theme, marquee, country,
+// bumpers, sponsors + label, and a background playlist rebuilt from the
+// original loop plus every song added that night. Returns the fresh party.
+export async function resurrectParty(
+  userId: string,
+  snapshot: PartySnapshot,
+): Promise<Party> {
+  const s = storage();
+
+  // Reuse the original code so the party code + join QR stay identical. Only
+  // mint a new one if a DIFFERENT host currently holds that code.
+  let code = snapshot.code.toUpperCase();
+  const existing = await s.get(code);
+  if (existing && existing.hostUserId && existing.hostUserId !== userId) {
+    code = makeCode();
+    for (let i = 0; i < 5 && (await s.get(code)); i++) code = makeCode();
+  }
+
+  // Background playlist = original loop items + every song added that night,
+  // deduped by videoId, capped at PLAYLIST_MAX.
+  const items: PlaylistTrack[] = [];
+  const seen = new Set<string>();
+  const add = (t: { videoId?: string; title?: string; thumbnail?: string }) => {
+    const vid = (t.videoId ?? "").toString().trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return;
+    if (seen.has(vid)) return;
+    seen.add(vid);
+    items.push({
+      videoId: vid,
+      title: (t.title || "YouTube video").toString().slice(0, 200),
+      thumbnail:
+        (t.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`)
+          .toString()
+          .slice(0, 500),
+    });
+  };
+  for (const it of snapshot.playlist?.items ?? []) add(it);
+  for (const t of snapshot.playedTracks ?? []) add(t);
+  const clean = items.slice(0, PLAYLIST_MAX);
+
+  const party: Party = {
+    code,
+    adminKey: makeAdminKey(),
+    adminPin: makeAdminPin(),
+    name: snapshot.name?.trim() || "The Party",
+    createdAt: Date.now(),
+    hostUserId: userId,
+    queue: [],
+    nowPlaying: null,
+    history: [],
+    banned: DEFAULT_BANS.slice(),
+    theme: snapshot.theme,
+    bumpers: snapshot.bumpers,
+    marquee: snapshot.marquee,
+    country: snapshot.country,
+    sponsors: snapshot.sponsors,
+    sponsorLabel: snapshot.sponsorLabel,
+    playlist: clean.length
+      ? { items: clean, cursor: 0, setAt: Date.now() }
+      : undefined,
+  };
+  // Start the playlist immediately so the host sees it took effect.
+  if (!party.nowPlaying) promoteNext(party);
+
+  await persist(party);
+  await addPartyToIndex(party.code);
+  // Force a snapshot now so the resurrected party's history entry reflects
+  // the restored state right away (and replaces the old one for this code).
+  await snapshotHostParty(party, true);
   return party;
 }
 

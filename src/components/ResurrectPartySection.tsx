@@ -124,7 +124,8 @@ export default function ResurrectPartySection() {
         Resurrect an old party
       </h2>
       <p className="mb-4 text-sm text-white/60">
-        Start a new party with all your previous settings, bumpers, and playlist.
+        Bring back a party exactly as it was — same code &amp; QR, settings,
+        bumpers, sponsors, and a playlist rebuilt from that night&apos;s music.
       </p>
 
       {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
