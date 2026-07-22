@@ -15,6 +15,8 @@ type YTPlayer = {
   unMute: () => void;
   isMuted: () => boolean;
   getPlayerState: () => number;
+  getCurrentTime: () => number;
+  getDuration: () => number;
 };
 
 type YTPlayerOptions = {
@@ -94,6 +96,12 @@ export default function Player({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const currentVideoRef = useRef<string | null>(null);
+  // Poll that ends the song a beat early so YouTube's end-screen
+  // recommendation grid never gets a chance to render.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // videoId we've already advanced past, so the early-end poll and the
+  // native "ended" event can't double-fire for the same song.
+  const endHandledRef = useRef<string | null>(null);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
   const onPlaybackErrorRef = useRef(onPlaybackError);
@@ -111,6 +119,10 @@ export default function Player({
 
     if (!song) {
       currentVideoRef.current = null;
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
       if (playerRef.current) {
         try { playerRef.current.destroy(); } catch { /* detached iframe */ }
         playerRef.current = null;
@@ -149,7 +161,12 @@ export default function Player({
             },
             onStateChange: (e) => {
               if (e.data === 1) setNeedsTap(false);
-              if (e.data === 0 && currentVideoRef.current) {
+              if (
+                e.data === 0 &&
+                currentVideoRef.current &&
+                endHandledRef.current !== currentVideoRef.current
+              ) {
+                endHandledRef.current = currentVideoRef.current;
                 onEndedRef.current(currentVideoRef.current);
               }
             },
@@ -162,6 +179,28 @@ export default function Player({
           },
         });
         currentVideoRef.current = song.videoId;
+
+        // Poll the playhead and advance ~1.2s before the true end so the
+        // end-screen recommendation grid never appears. Guarded by
+        // endHandledRef so it fires once per song.
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = setInterval(() => {
+          const p = playerRef.current;
+          const vid = currentVideoRef.current;
+          if (!p || !vid) return;
+          try {
+            const dur = p.getDuration();
+            const cur = p.getCurrentTime();
+            if (
+              dur > 0 &&
+              dur - cur <= 1.2 &&
+              endHandledRef.current !== vid
+            ) {
+              endHandledRef.current = vid;
+              onEndedRef.current(vid);
+            }
+          } catch { /* player torn down */ }
+        }, 500);
 
         // Check after a beat whether the browser blocked autoplay.
         // State -1 = unstarted, 5 = cued — both mean it didn't start.
@@ -241,6 +280,11 @@ export default function Player({
           className="yt-wrap absolute inset-0"
           style={song ? undefined : { display: "none" }}
         />
+        {/* Transparent shield over the video: swallows clicks so YouTube's
+            in-video info cards / end-screen teasers can't navigate away from
+            the party. Sits below the play/unmute prompts (higher z) so those
+            stay clickable. Playback is driven by our own controls anyway. */}
+        {song ? <div className="absolute inset-0 z-[5]" aria-hidden /> : null}
         {!song && (
           <div className="flex h-full w-full items-center justify-center text-white/40">
             Waiting for the first banger…
