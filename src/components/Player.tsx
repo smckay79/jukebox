@@ -262,6 +262,32 @@ export default function Player({
     return () => clearTimeout(timer);
   }, [goldenSkip, song, triggerSkip]);
 
+  // If we had to auto-mute (browser blocked sound-autoplay), turn the sound
+  // back on at the FIRST user interaction anywhere on the page — a click,
+  // tap, or key press is a valid gesture, so the crowd gets audio the moment
+  // anyone touches the page (including hitting Fullscreen) without having to
+  // hunt for the unmute pill.
+  useEffect(() => {
+    if (!needsUnmute && !needsTap) return;
+    const onGesture = () => {
+      try {
+        playerRef.current?.unMute();
+        playerRef.current?.playVideo();
+      } catch { /* destroyed */ }
+      setNeedsUnmute(false);
+      setNeedsTap(false);
+    };
+    const opts = { once: true, capture: true } as const;
+    window.addEventListener("pointerdown", onGesture, opts);
+    window.addEventListener("keydown", onGesture, opts);
+    window.addEventListener("touchstart", onGesture, opts);
+    return () => {
+      window.removeEventListener("pointerdown", onGesture, opts);
+      window.removeEventListener("keydown", onGesture, opts);
+      window.removeEventListener("touchstart", onGesture, opts);
+    };
+  }, [needsUnmute, needsTap]);
+
   return (
     <div
       className={
@@ -295,8 +321,12 @@ export default function Player({
             type="button"
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm"
             onClick={() => {
-              playerRef.current?.playVideo();
+              try {
+                playerRef.current?.unMute();
+                playerRef.current?.playVideo();
+              } catch { /* destroyed */ }
               setNeedsTap(false);
+              setNeedsUnmute(false);
             }}
           >
             <span className="text-4xl">▶</span>
