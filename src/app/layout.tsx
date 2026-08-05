@@ -12,7 +12,15 @@ export const metadata: Metadata = {
     title: "VideoJam",
   },
   icons: {
-    apple: "/icon-192.png",
+    // Browser-tab favicon (desktop + mobile browsers). Point at the PNG
+    // logos we already ship; browsers scale them down for the tab.
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: ["/icon-192.png"],
+    // iOS "Add to Home Screen" icon.
+    apple: [{ url: "/icon-192.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
