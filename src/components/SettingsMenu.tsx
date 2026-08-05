@@ -451,7 +451,7 @@ export default function SettingsMenu({
           onClick={() => setOpen(false)}
         >
           <div
-            className="mt-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#120a1f] p-5 shadow-2xl"
+            className="mt-10 w-full max-w-md md:max-w-2xl rounded-2xl border border-white/10 bg-[#120a1f] p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
