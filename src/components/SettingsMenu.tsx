@@ -10,6 +10,18 @@ interface MatchSearchResult {
   thumbnail: string;
 }
 
+// Turn a YouTube result title into a match keyword for a "before matching
+// songs" bumper. Strips parenthetical/bracketed noise like
+// "(Official Music Video)" so it stays a reliable substring of the queued
+// song's title — while still targeting the specific song, not the artist.
+function bumperMatchFromTitle(title: string): string {
+  return title
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 const COUNTRY_OPTIONS: Array<{ code: string; label: string }> = [
   { code: "", label: "Auto (from location)" },
   { code: "US", label: "United States" },
@@ -641,8 +653,9 @@ export default function SettingsMenu({
                             type="button"
                             className="flex w-full items-center gap-2 rounded-md p-1.5 text-left hover:bg-white/10"
                             onClick={() => {
-                              setBumperMatch(r.channelTitle);
-                              setMatchQuery(r.channelTitle);
+                              const keyword = bumperMatchFromTitle(r.title);
+                              setBumperMatch(keyword);
+                              setMatchQuery(keyword);
                               setMatchFocused(false);
                               setMatchResults([]);
                             }}
@@ -662,7 +675,7 @@ export default function SettingsMenu({
                               </p>
                             </div>
                             <span className="flex-shrink-0 rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/60">
-                              Use &quot;{r.channelTitle}&quot;
+                              Use &quot;{bumperMatchFromTitle(r.title)}&quot;
                             </span>
                           </button>
                         ))}
