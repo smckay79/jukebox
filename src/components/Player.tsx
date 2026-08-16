@@ -102,6 +102,11 @@ export default function Player({
   // videoId we've already advanced past, so the early-end poll and the
   // native "ended" event can't double-fire for the same song.
   const endHandledRef = useRef<string | null>(null);
+  // When the current video was (re)loaded. For a short window afterward
+  // getCurrentTime()/getDuration() can still report the PREVIOUS video's
+  // near-end values — the early-end poll must ignore that window or it will
+  // instantly "end" every freshly-loaded song and blow through the playlist.
+  const loadedAtRef = useRef(0);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
   const onPlaybackErrorRef = useRef(onPlaybackError);
@@ -181,20 +186,26 @@ export default function Player({
           },
         });
         currentVideoRef.current = song.videoId;
+        loadedAtRef.current = Date.now();
 
         // Poll the playhead and advance ~1.2s before the true end so the
         // end-screen recommendation grid never appears. Guarded by
-        // endHandledRef so it fires once per song.
+        // endHandledRef so it fires once per song, and by loadedAtRef so a
+        // just-loaded video's stale playhead can't trigger a false end.
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = setInterval(() => {
           const p = playerRef.current;
           const vid = currentVideoRef.current;
           if (!p || !vid) return;
+          // Give a freshly-loaded video time to reset its playhead before we
+          // trust getCurrentTime()/getDuration().
+          if (Date.now() - loadedAtRef.current < 2500) return;
           try {
             const dur = p.getDuration();
             const cur = p.getCurrentTime();
             if (
               dur > 0 &&
+              cur > 0 &&
               dur - cur <= 1.2 &&
               endHandledRef.current !== vid
             ) {
@@ -231,6 +242,7 @@ export default function Player({
         try { playerRef.current.unMute(); } catch { /* not ready */ }
         playerRef.current.playVideo();
         currentVideoRef.current = song.videoId;
+        loadedAtRef.current = Date.now();
       }
     });
 
