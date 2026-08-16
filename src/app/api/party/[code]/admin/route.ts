@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   addBumper,
   banVideo,
+  clearAutoBans,
   clearPartyPlaylist,
   getBumpers,
   removeBumper,
@@ -117,6 +118,18 @@ export async function POST(
       return NextResponse.json({ error: res.error }, { status });
     }
     return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "clearAutoBans") {
+    const res = await clearAutoBans(params.code);
+    if (!res.ok) {
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
+    }
+    return NextResponse.json({
+      party: toPublicParty(res.party),
+      removed: res.removed,
+    });
   }
 
   if (body.action === "theme") {

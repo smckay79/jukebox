@@ -356,6 +356,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "ban", url: raw });
   }
 
+  async function onClearAutoBans() {
+    await adminPost({ action: "clearAutoBans" });
+  }
+
   const [downvoteBusy, setDownvoteBusy] = useState(false);
 
   async function onDownvote() {
@@ -714,6 +718,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               banned={party.banned}
               onUnban={onUnban}
               onBanUrl={onBanUrl}
+              onClearAutoBans={onClearAutoBans}
             />
           </>
         ) : null}
@@ -915,6 +920,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                 banned={party.banned}
                 onUnban={onUnban}
                 onBanUrl={onBanUrl}
+              onClearAutoBans={onClearAutoBans}
               />
             </>
           ) : null}
@@ -960,6 +966,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                   banned={party.banned}
                   onUnban={onUnban}
                   onBanUrl={onBanUrl}
+              onClearAutoBans={onClearAutoBans}
                 />
               </>
             ) : null}

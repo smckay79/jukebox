@@ -671,6 +671,24 @@ export async function unbanVideo(
   return { ok: true, party };
 }
 
+// Remove every auto-banned entry (title tagged "[Auto-banned: …]"), leaving
+// the default and hand-picked bans in place. Recovery for parties whose ban
+// list got flooded by transient playback errors.
+export async function clearAutoBans(
+  code: string,
+): Promise<{ ok: true; party: Party; removed: number } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  const before = party.banned.length;
+  party.banned = party.banned.filter(
+    (b) => !b.title?.startsWith("[Auto-banned:"),
+  );
+  const removed = before - party.banned.length;
+  if (removed > 0) await persist(party);
+  return { ok: true, party, removed };
+}
+
 // Passing `null` clears the theme. Custom images are expected to be
 // already-resized data URLs; we cap stored length to keep Redis values sane.
 const MAX_THEME_IMAGE_LEN = 600_000; // ~450KB base64 → ~340KB binary

@@ -10,15 +10,22 @@ export default function BannedList({
   banned,
   onUnban,
   onBanUrl,
+  onClearAutoBans,
 }: {
   banned: BannedVideo[];
   onUnban: (videoId: string) => void;
   onBanUrl: (raw: string) => Promise<string | null>;
+  onClearAutoBans?: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  const autoBanCount = banned.filter((b) =>
+    b.title?.startsWith("[Auto-banned:"),
+  ).length;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,6 +73,26 @@ export default function BannedList({
             </button>
           </form>
           {err ? <p className="text-xs text-red-400">{err}</p> : null}
+          {onClearAutoBans && autoBanCount > 0 ? (
+            <button
+              type="button"
+              disabled={clearing}
+              onClick={async () => {
+                setClearing(true);
+                try {
+                  await onClearAutoBans();
+                } finally {
+                  setClearing(false);
+                }
+              }}
+              className="btn-ghost w-full !py-1.5 text-xs text-amber-300 hover:bg-amber-600/20"
+              title="Remove videos that were auto-banned due to playback errors"
+            >
+              {clearing
+                ? "Clearing…"
+                : `Clear ${autoBanCount} auto-banned video${autoBanCount === 1 ? "" : "s"}`}
+            </button>
+          ) : null}
           {banned.length === 0 ? (
             <p className="text-xs text-white/50">Nothing banned yet.</p>
           ) : (

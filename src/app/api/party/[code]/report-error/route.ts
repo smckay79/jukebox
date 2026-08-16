@@ -32,22 +32,32 @@ export async function POST(
   };
   const reason = reasons[errorCode] ?? `playback error ${errorCode}`;
 
+  // Only auto-ban for errors that mean the video can NEVER play here
+  // (bad ID, removed/private, embedding disabled). Error 5 (HTML5 player
+  // error) and unknown codes are frequently transient — e.g. a hiccup during
+  // a fast song transition — so we skip the song but do NOT permanently ban
+  // it, otherwise a momentary glitch would nuke perfectly good videos.
+  const BANNABLE = new Set([2, 100, 101, 150]);
+  const shouldBan = BANNABLE.has(errorCode);
+
   // Skip the song first so the party advances immediately
   const skipResult = await songEnded(params.code, videoId);
 
-  // Ban the video so it can't be re-added
-  await banVideo(params.code, {
-    videoId,
-    title: `[Auto-banned: ${reason}]`,
-    thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
-  });
+  if (shouldBan) {
+    // Ban the video so it can't be re-added
+    await banVideo(params.code, {
+      videoId,
+      title: `[Auto-banned: ${reason}]`,
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
+    });
+  }
 
   if (!skipResult.ok) {
     return NextResponse.json({ error: skipResult.error }, { status: 404 });
   }
   return NextResponse.json({
     party: toPublicParty(skipResult.party),
-    banned: true,
+    banned: shouldBan,
     reason,
   });
 }
