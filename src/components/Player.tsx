@@ -156,7 +156,13 @@ export default function Player({
               e.target.playVideo();
             },
             onStateChange: (e) => {
-              if (e.data === 1) setNeedsTap(false);
+              // Only dismiss the "click for sound" prompt once we're actually
+              // playing WITH sound — a muted auto-play shouldn't hide it.
+              if (e.data === 1) {
+                let muted = false;
+                try { muted = e.target.isMuted(); } catch { /* not ready */ }
+                if (!muted) setNeedsTap(false);
+              }
               if (
                 e.data === 0 &&
                 currentVideoRef.current &&
@@ -198,16 +204,21 @@ export default function Player({
           } catch { /* player torn down */ }
         }, 500);
 
-        // Check after a beat whether the browser blocked autoplay.
-        // State -1 = unstarted, 5 = cued — both mean it didn't start (the
-        // browser blocked autoplay-with-sound). Show a "Click to play"
-        // prompt that starts playback WITH sound on the user's tap. We never
-        // auto-mute — sound is preserved.
+        // Check after a beat whether the video is actually playing WITH
+        // sound. Chrome blocks unmuted autoplay on a fresh load, and the
+        // YouTube player responds by either not starting (state -1/5) OR
+        // auto-muting itself and playing silently (state 1 but isMuted()).
+        // In every one of those cases we show a "Click for sound" prompt;
+        // the tap is a user gesture that unmutes and plays.
         setTimeout(() => {
           if (cancelled) return;
           try {
-            const st = playerRef.current?.getPlayerState();
-            if (st === -1 || st === 5) setNeedsTap(true);
+            const p = playerRef.current;
+            if (!p) return;
+            const st = p.getPlayerState();
+            let muted = false;
+            try { muted = p.isMuted(); } catch { /* not ready */ }
+            if (st === -1 || st === 5 || muted) setNeedsTap(true);
           } catch { /* destroyed */ }
         }, 1500);
       } else if (
@@ -215,6 +226,9 @@ export default function Player({
         currentVideoRef.current !== song.videoId
       ) {
         playerRef.current.loadVideoById(song.videoId);
+        // Carry sound into the next song once the user has enabled it (no-op
+        // if the browser still requires a gesture).
+        try { playerRef.current.unMute(); } catch { /* not ready */ }
         playerRef.current.playVideo();
         currentVideoRef.current = song.videoId;
       }
@@ -280,9 +294,9 @@ export default function Player({
               setNeedsTap(false);
             }}
           >
-            <span className="text-4xl">▶</span>
+            <span className="text-4xl">🔊</span>
             <span className="text-sm font-medium text-white/80">
-              Click to play
+              Click for sound
             </span>
           </button>
         ) : null}
