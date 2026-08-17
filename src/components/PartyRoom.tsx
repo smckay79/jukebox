@@ -55,6 +55,9 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
   const [showMobileVideo, setShowMobileVideo] = useState(false);
   const [showTVMode, setShowTVMode] = useState(false);
   const [sponsorLogo, setSponsorLogo] = useState<string | null>(null);
+  // Mobile hamburger — keeps secondary actions (video/TV/QR/install/account)
+  // out of the way so the phone view stays focused on requesting songs.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Presenter / fullscreen mode — triggered by the host for TV casting.
   // We fullscreen only the player-cluster (video + QR overlay + up-next
   // strip + marquee) instead of the whole document so the iframe never
@@ -500,7 +503,116 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         />
       ) : null}
       <main className="mx-auto max-w-6xl px-4 py-4 md:py-6">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-6">
+      {/* Mobile header — centered logo, with everything secondary tucked into
+          a hamburger at the top right so the request box stays the focus. */}
+      <header className="relative mb-4 md:hidden">
+        <div className="absolute right-0 top-0 z-30">
+          <button
+            type="button"
+            aria-label="Menu"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-lg leading-none text-white/80 transition hover:bg-white/10"
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
+          {mobileMenuOpen ? (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setMobileMenuOpen(false)}
+              />
+              <div className="absolute right-0 z-20 mt-2 flex w-56 flex-col items-stretch gap-1 rounded-xl border border-white/10 bg-[#160e26] p-2 shadow-2xl [&_button]:w-full [&_button]:justify-start">
+                <UserMenu
+                  nextPath={`/party/${party.code}`}
+                  onUserChange={setAuthUser}
+                />
+                <button
+                  className="btn-ghost text-sm"
+                  onClick={() => {
+                    setShowMobileVideo((v) => !v);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  {showMobileVideo ? "Hide video" : "Show video"}
+                </button>
+                <button
+                  className="btn-ghost text-sm"
+                  onClick={() => {
+                    setShowTVMode(true);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  📺 TV Mode
+                </button>
+                <button
+                  className="btn-ghost text-sm"
+                  onClick={() => {
+                    setShowQR((v) => !v);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  {showQR ? "Hide QR" : "Show QR"}
+                </button>
+                <AddToHomeScreen />
+                {isAdmin ? (
+                  <SettingsMenu
+                    theme={party.theme}
+                    marquee={party.marquee}
+                    country={party.country}
+                    bumperCount={party.bumpers?.count ?? 0}
+                    code={party.code}
+                    adminKey={adminKey}
+                    party={party}
+                    onSetTheme={onSetTheme}
+                    onSetMarquee={onSetMarquee}
+                    onSetCountry={onSetCountry}
+                    onAddBumper={onAddBumper}
+                    onRemoveBumper={onRemoveBumper}
+                    onListBumpers={onListBumpers}
+                    onPartyUpdated={setParty}
+                    isPro={isPro}
+                  />
+                ) : null}
+                {isAdmin && adminKey ? (
+                  <EndPartyButton
+                    code={party.code}
+                    adminKey={adminKey}
+                    onEnded={(p, r) => {
+                      setRecap(r);
+                      setParty(p);
+                    }}
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+        <div className="flex flex-col items-center px-12 text-center">
+          <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-web.png"
+              alt="VideoJam"
+              className="w-[220px] max-w-full"
+            />
+          </Link>
+          <h1 className="mt-1 max-w-full truncate text-xl font-bold">
+            {party.name}
+          </h1>
+          <div className="mt-1 flex items-center justify-center gap-2 text-sm text-white/60">
+            <span className="chip">
+              code <span className="font-mono text-white">{party.code}</span>
+            </span>
+            {isAdmin ? (
+              <span className="chip bg-brand-600/30 text-brand-100">host</span>
+            ) : null}
+          </div>
+        </div>
+      </header>
+
+      {/* Desktop header — unchanged full button bar. */}
+      <header className="mb-4 hidden flex-wrap items-center justify-between gap-3 md:mb-6 md:flex">
         <div className="min-w-0">
           <Link href="/">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -520,19 +632,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            className="btn-ghost text-sm md:hidden"
-            onClick={() => setShowMobileVideo((v) => !v)}
-          >
-            {showMobileVideo ? "Hide video" : "Show video"}
-          </button>
-          <button
-            className="btn-ghost text-sm md:hidden"
-            onClick={() => setShowTVMode(true)}
-          >
-            📺 TV Mode
-          </button>
-          <button
-            className="btn-ghost text-sm hidden md:inline-flex"
+            className="btn-ghost text-sm"
             onClick={enterPresenter}
             title="Expand the video to fill the screen (Esc to exit)"
           >
