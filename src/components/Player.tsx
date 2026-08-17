@@ -48,6 +48,30 @@ declare global {
 // can turn it up on a big system rather than starting pinned at max.
 const DEFAULT_VOLUME = 75;
 
+// Phones/tablets are guest devices — the sound comes from the host's system,
+// so we start muted there and only unmute on an explicit request (tapping the
+// sound badge, the slider, or M). Desktop keeps the auto-unmute behaviour.
+// Combines a UA check with a coarse-pointer/touch check so it also catches
+// iPadOS, which reports a desktop UA.
+function detectMobile(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const ua = navigator.userAgent || "";
+    if (/Android|iPhone|iPod|iPad|Windows Phone|webOS|BlackBerry|Opera Mini|Mobile/i.test(ua)) {
+      return true;
+    }
+    // iPadOS 13+ masquerades as macOS; touch points give it away.
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true;
+    // Fallback: touch-primary device with no fine pointer.
+    return (
+      window.matchMedia?.("(pointer: coarse)").matches === true &&
+      window.matchMedia?.("(hover: none)").matches === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 let ytReadyPromise: Promise<void> | null = null;
 function loadYouTubeApi(): Promise<void> {
   if (typeof window === "undefined")
@@ -123,6 +147,16 @@ export default function Player({
   const [isMutedNow, setIsMutedNow] = useState(false);
   // Set once the user has interacted, so later songs start unmuted directly.
   const soundUnlockedRef = useRef(false);
+  // Mobile guests default to muted (host's system carries the audio). Detected
+  // after mount so SSR and first paint stay consistent.
+  const isMobileRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const m = detectMobile();
+    isMobileRef.current = m;
+    setIsMobile(m);
+    if (m) setIsMutedNow(true);
+  }, []);
   // Volume 0-100. Persisted so it survives reloads / song changes; a saved
   // preference overrides the default on mount.
   const [volume, setVolumeState] = useState(DEFAULT_VOLUME);
@@ -181,7 +215,13 @@ export default function Player({
               // starts, and the first user gesture restores sound.
               try {
                 e.target.setVolume(volumeRef.current);
-                if (soundUnlockedRef.current) e.target.unMute();
+                // Mobile guests start muted unless they've explicitly asked
+                // for sound on this device.
+                if (isMobileRef.current && !soundUnlockedRef.current) {
+                  e.target.mute();
+                } else if (soundUnlockedRef.current) {
+                  e.target.unMute();
+                }
               } catch { /* not ready */ }
               e.target.playVideo();
             },
@@ -268,8 +308,12 @@ export default function Player({
             try { muted = p.isMuted(); } catch { /* not ready */ }
             setIsMutedNow(muted && !soundUnlockedRef.current);
             setNeedsTap(stalled && checks > 4);
-            // Playing with sound (or user already unlocked) — we're done.
-            if (!stalled && (!muted || soundUnlockedRef.current)) {
+            // Done once it's playing — with sound, or intentionally muted on
+            // a mobile guest device (there we wait for an explicit opt-in).
+            if (
+              !stalled &&
+              (!muted || soundUnlockedRef.current || isMobileRef.current)
+            ) {
               clearInterval(watchdog);
             }
           } catch { clearInterval(watchdog); }
@@ -402,6 +446,14 @@ export default function Player({
   // phase so the click-shield over the iframe can't swallow it.
   useEffect(() => {
     const unlock = () => {
+      // On phones/tablets we deliberately stay muted — a guest tapping around
+      // the queue shouldn't start blasting audio next to the host's speakers.
+      // They can still opt in via the sound badge, slider, or M key.
+      if (isMobileRef.current) {
+        try { playerRef.current?.playVideo(); } catch { /* not ready */ }
+        setNeedsTap(false);
+        return;
+      }
       soundUnlockedRef.current = true;
       try {
         playerRef.current?.unMute();
@@ -470,10 +522,30 @@ export default function Player({
         {/* Playing but muted (Chrome blocked sound autoplay). Any click on
             the page restores sound; this just makes that discoverable. */}
         {song && isMutedNow && !needsTap ? (
-          <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur">
-            <span className="text-base">🔇</span>
-            <span>Click anywhere for sound</span>
-          </div>
+          isMobile ? (
+            // Mobile: an explicit opt-in button (we never auto-unmute here).
+            <button
+              type="button"
+              onClick={() => {
+                soundUnlockedRef.current = true;
+                try {
+                  playerRef.current?.unMute();
+                  playerRef.current?.setVolume(volumeRef.current);
+                  playerRef.current?.playVideo();
+                } catch { /* not ready */ }
+                setIsMutedNow(false);
+              }}
+              className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur transition hover:bg-black"
+            >
+              <span className="text-base">🔇</span>
+              <span>Tap for sound</span>
+            </button>
+          ) : (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur">
+              <span className="text-base">🔇</span>
+              <span>Click anywhere for sound</span>
+            </div>
+          )
         ) : null}
         {/* Volume HUD — flashes briefly after a keyboard/slider change. */}
         {song && volumeFlash ? (
