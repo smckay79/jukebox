@@ -17,6 +17,8 @@ type YTPlayer = {
   getPlayerState: () => number;
   getCurrentTime: () => number;
   getDuration: () => number;
+  setVolume: (v: number) => void;
+  getVolume: () => number;
 };
 
 type YTPlayerOptions = {
@@ -117,6 +119,12 @@ export default function Player({
   const [isMutedNow, setIsMutedNow] = useState(false);
   // Set once the user has interacted, so later songs start unmuted directly.
   const soundUnlockedRef = useRef(false);
+  // Volume 0-100. Persisted so it survives reloads / song changes.
+  const [volume, setVolumeState] = useState(100);
+  const volumeRef = useRef(100);
+  // Briefly shown volume HUD after a change.
+  const [volumeFlash, setVolumeFlash] = useState(false);
+  const volumeFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep playback active when app goes to background on mobile
   useBackgroundAudio(song, playerRef, partyName);
@@ -167,6 +175,7 @@ export default function Player({
               // below falls back to muted playback so the video still
               // starts, and the first user gesture restores sound.
               try {
+                e.target.setVolume(volumeRef.current);
                 if (soundUnlockedRef.current) e.target.unMute();
               } catch { /* not ready */ }
               e.target.playVideo();
@@ -266,7 +275,8 @@ export default function Player({
         currentVideoRef.current !== song.videoId
       ) {
         playerRef.current.loadVideoById(song.videoId);
-        // Carry sound into the next song once the user has interacted.
+        // Carry sound + volume into the next song once the user has interacted.
+        try { playerRef.current.setVolume(volumeRef.current); } catch { /* not ready */ }
         if (soundUnlockedRef.current) {
           try { playerRef.current.unMute(); } catch { /* not ready */ }
           setIsMutedNow(false);
@@ -296,6 +306,89 @@ export default function Player({
     const timer = setTimeout(triggerSkip, 2200);
     return () => clearTimeout(timer);
   }, [goldenSkip, song, triggerSkip]);
+
+  // Restore the saved volume on mount.
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem("videojam:volume"));
+      if (Number.isFinite(saved) && saved >= 0 && saved <= 100) {
+        volumeRef.current = saved;
+        setVolumeState(saved);
+      }
+    } catch { /* storage blocked */ }
+  }, []);
+
+  // Apply a new volume to the player, persist it, and flash the HUD.
+  // Setting volume above 0 also unmutes, so the volume keys double as an
+  // unmute gesture (they're a user interaction, which is what Chrome wants).
+  const applyVolume = useCallback((next: number) => {
+    const v = Math.max(0, Math.min(100, Math.round(next)));
+    volumeRef.current = v;
+    setVolumeState(v);
+    try { localStorage.setItem("videojam:volume", String(v)); } catch { /* ignore */ }
+    try {
+      const p = playerRef.current;
+      if (p) {
+        p.setVolume(v);
+        if (v > 0) {
+          soundUnlockedRef.current = true;
+          p.unMute();
+          setIsMutedNow(false);
+        } else {
+          p.mute();
+        }
+      }
+    } catch { /* not ready */ }
+    setVolumeFlash(true);
+    if (volumeFlashTimer.current) clearTimeout(volumeFlashTimer.current);
+    volumeFlashTimer.current = setTimeout(() => setVolumeFlash(false), 1200);
+  }, []);
+
+  // Keyboard volume control: ↑/↓ (and +/-) adjust by 5, M toggles mute.
+  // Ignored while typing in an input so it never hijacks the search box.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowUp" || e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        applyVolume(volumeRef.current + 5);
+      } else if (e.key === "ArrowDown" || e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        applyVolume(volumeRef.current - 5);
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        try {
+          const p = playerRef.current;
+          if (!p) return;
+          if (p.isMuted()) {
+            soundUnlockedRef.current = true;
+            p.unMute();
+            if (volumeRef.current === 0) applyVolume(50);
+            setIsMutedNow(false);
+          } else {
+            p.mute();
+            setIsMutedNow(true);
+          }
+          setVolumeFlash(true);
+          if (volumeFlashTimer.current) clearTimeout(volumeFlashTimer.current);
+          volumeFlashTimer.current = setTimeout(() => setVolumeFlash(false), 1200);
+        } catch { /* not ready */ }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [applyVolume]);
 
   // Chrome requires a user gesture before audio can play. Listen for the
   // FIRST interaction anywhere on the page (click, tap, key, or scroll) and
@@ -377,6 +470,23 @@ export default function Player({
             <span>Click anywhere for sound</span>
           </div>
         ) : null}
+        {/* Volume HUD — flashes briefly after a keyboard/slider change. */}
+        {song && volumeFlash ? (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-xl bg-black/80 px-5 py-3 shadow-xl backdrop-blur">
+            <span className="text-2xl">
+              {isMutedNow || volume === 0 ? "🔇" : volume < 50 ? "🔉" : "🔊"}
+            </span>
+            <div className="h-2 w-32 overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-white transition-all"
+                style={{ width: `${isMutedNow ? 0 : volume}%` }}
+              />
+            </div>
+            <span className="w-10 text-right text-sm font-semibold text-white">
+              {isMutedNow ? "Muted" : `${volume}%`}
+            </span>
+          </div>
+        ) : null}
         {/* Golden skip overlay — dramatic full-screen golden X */}
         {song && goldenSkip ? (
           <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden">
@@ -447,6 +557,24 @@ export default function Player({
             <div className="text-xs text-white/50">
               Added by {song.addedBy}
             </div>
+          </div>
+          {/* Volume slider — keyboard (↑/↓, +/-, M) works anywhere too. */}
+          <div
+            className="hidden items-center gap-2 sm:flex"
+            title="Volume — use ↑/↓ keys, or M to mute"
+          >
+            <span className="text-base leading-none">
+              {isMutedNow || volume === 0 ? "🔇" : volume < 50 ? "🔉" : "🔊"}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={isMutedNow ? 0 : volume}
+              onChange={(e) => applyVolume(Number(e.target.value))}
+              className="w-24 cursor-pointer accent-brand-500"
+              aria-label="Volume"
+            />
           </div>
           {isHost && onGoldenDownvote ? (
             <button
