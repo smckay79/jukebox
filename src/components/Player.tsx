@@ -44,6 +44,10 @@ declare global {
   }
 }
 
+// Starting volume for a fresh visitor (0-100). Leaves headroom so the host
+// can turn it up on a big system rather than starting pinned at max.
+const DEFAULT_VOLUME = 75;
+
 let ytReadyPromise: Promise<void> | null = null;
 function loadYouTubeApi(): Promise<void> {
   if (typeof window === "undefined")
@@ -119,9 +123,10 @@ export default function Player({
   const [isMutedNow, setIsMutedNow] = useState(false);
   // Set once the user has interacted, so later songs start unmuted directly.
   const soundUnlockedRef = useRef(false);
-  // Volume 0-100. Persisted so it survives reloads / song changes.
-  const [volume, setVolumeState] = useState(100);
-  const volumeRef = useRef(100);
+  // Volume 0-100. Persisted so it survives reloads / song changes; a saved
+  // preference overrides the default on mount.
+  const [volume, setVolumeState] = useState(DEFAULT_VOLUME);
+  const volumeRef = useRef(DEFAULT_VOLUME);
   // Briefly shown volume HUD after a change.
   const [volumeFlash, setVolumeFlash] = useState(false);
   const volumeFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -374,7 +379,7 @@ export default function Player({
           if (p.isMuted()) {
             soundUnlockedRef.current = true;
             p.unMute();
-            if (volumeRef.current === 0) applyVolume(50);
+            if (volumeRef.current === 0) applyVolume(DEFAULT_VOLUME);
             setIsMutedNow(false);
           } else {
             p.mute();
