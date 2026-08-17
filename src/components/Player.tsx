@@ -112,6 +112,11 @@ export default function Player({
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
   const [needsTap, setNeedsTap] = useState(false);
+  // True while the video is playing but muted because Chrome blocked
+  // autoplay-with-sound. Any interaction clears it (see the gesture effect).
+  const [isMutedNow, setIsMutedNow] = useState(false);
+  // Set once the user has interacted, so later songs start unmuted directly.
+  const soundUnlockedRef = useRef(false);
 
   // Keep playback active when app goes to background on mobile
   useBackgroundAudio(song, playerRef, partyName);
@@ -158,6 +163,12 @@ export default function Player({
           },
           events: {
             onReady: (e) => {
+              // Try with sound first. If Chrome blocks it, the watchdog
+              // below falls back to muted playback so the video still
+              // starts, and the first user gesture restores sound.
+              try {
+                if (soundUnlockedRef.current) e.target.unMute();
+              } catch { /* not ready */ }
               e.target.playVideo();
             },
             onStateChange: (e) => {
@@ -215,31 +226,51 @@ export default function Player({
           } catch { /* player torn down */ }
         }, 500);
 
-        // Check after a beat whether the video is actually playing WITH
-        // sound. Chrome blocks unmuted autoplay on a fresh load, and the
-        // YouTube player responds by either not starting (state -1/5) OR
-        // auto-muting itself and playing silently (state 1 but isMuted()).
-        // In every one of those cases we show a "Click for sound" prompt;
-        // the tap is a user gesture that unmutes and plays.
-        setTimeout(() => {
-          if (cancelled) return;
+        // Autoplay watchdog. Chrome blocks autoplay-with-sound on a fresh
+        // load, so if the video hasn't started after a beat we mute and
+        // retry — muted autoplay is always permitted, so the video reliably
+        // starts either way. We then track the mute state so the UI can
+        // prompt for sound; the first user gesture unmutes (see below).
+        let checks = 0;
+        const watchdog = setInterval(() => {
+          if (cancelled) { clearInterval(watchdog); return; }
+          const p = playerRef.current;
+          if (!p) { clearInterval(watchdog); return; }
+          checks += 1;
           try {
-            const p = playerRef.current;
-            if (!p) return;
             const st = p.getPlayerState();
+            const stalled = st === -1 || st === 5;
+            if (stalled) {
+              // Not playing — the sound attempt was blocked. Mute so the
+              // video can start; sound comes back on first interaction.
+              if (!soundUnlockedRef.current) {
+                p.mute();
+                p.playVideo();
+              } else {
+                p.playVideo();
+              }
+            }
             let muted = false;
             try { muted = p.isMuted(); } catch { /* not ready */ }
-            if (st === -1 || st === 5 || muted) setNeedsTap(true);
-          } catch { /* destroyed */ }
-        }, 1500);
+            setIsMutedNow(muted && !soundUnlockedRef.current);
+            setNeedsTap(stalled && checks > 4);
+            // Playing with sound (or user already unlocked) — we're done.
+            if (!stalled && (!muted || soundUnlockedRef.current)) {
+              clearInterval(watchdog);
+            }
+          } catch { clearInterval(watchdog); }
+          if (checks > 20) clearInterval(watchdog);
+        }, 400);
       } else if (
         playerRef.current &&
         currentVideoRef.current !== song.videoId
       ) {
         playerRef.current.loadVideoById(song.videoId);
-        // Carry sound into the next song once the user has enabled it (no-op
-        // if the browser still requires a gesture).
-        try { playerRef.current.unMute(); } catch { /* not ready */ }
+        // Carry sound into the next song once the user has interacted.
+        if (soundUnlockedRef.current) {
+          try { playerRef.current.unMute(); } catch { /* not ready */ }
+          setIsMutedNow(false);
+        }
         playerRef.current.playVideo();
         currentVideoRef.current = song.videoId;
         loadedAtRef.current = Date.now();
@@ -265,6 +296,32 @@ export default function Player({
     const timer = setTimeout(triggerSkip, 2200);
     return () => clearTimeout(timer);
   }, [goldenSkip, song, triggerSkip]);
+
+  // Chrome requires a user gesture before audio can play. Listen for the
+  // FIRST interaction anywhere on the page (click, tap, key, or scroll) and
+  // use it to unmute — so the crowd gets sound the moment anyone touches the
+  // page, without having to find a specific button. Runs in the capture
+  // phase so the click-shield over the iframe can't swallow it.
+  useEffect(() => {
+    const unlock = () => {
+      soundUnlockedRef.current = true;
+      try {
+        playerRef.current?.unMute();
+        playerRef.current?.playVideo();
+      } catch { /* not ready */ }
+      setIsMutedNow(false);
+      setNeedsTap(false);
+    };
+    const opts = { capture: true, passive: true } as const;
+    window.addEventListener("pointerdown", unlock, opts);
+    window.addEventListener("touchstart", unlock, opts);
+    window.addEventListener("keydown", unlock, opts);
+    return () => {
+      window.removeEventListener("pointerdown", unlock, opts);
+      window.removeEventListener("touchstart", unlock, opts);
+      window.removeEventListener("keydown", unlock, opts);
+    };
+  }, []);
 
   return (
     <div
@@ -311,6 +368,14 @@ export default function Player({
               Click for sound
             </span>
           </button>
+        ) : null}
+        {/* Playing but muted (Chrome blocked sound autoplay). Any click on
+            the page restores sound; this just makes that discoverable. */}
+        {song && isMutedNow && !needsTap ? (
+          <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur">
+            <span className="text-base">🔇</span>
+            <span>Click anywhere for sound</span>
+          </div>
         ) : null}
         {/* Golden skip overlay — dramatic full-screen golden X */}
         {song && goldenSkip ? (
