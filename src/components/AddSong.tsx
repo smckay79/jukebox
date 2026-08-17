@@ -176,9 +176,9 @@ export default function AddSong({
 
   return (
     <form ref={rootRef} onSubmit={onSubmit} className="relative">
-      <div className="card space-y-2 border border-brand-500/30 bg-gradient-to-br from-brand-900/40 to-brand-800/20 p-4">
-        <h2 className="text-center text-lg font-bold tracking-tight text-white">
-          Drop your next banger
+      <div className="card space-y-2.5 border-2 border-brand-400/60 bg-gradient-to-br from-brand-800/70 to-brand-900/50 p-4 shadow-[0_0_28px_rgba(168,85,247,0.22)]">
+        <h2 className="text-center text-xl font-bold tracking-tight text-white">
+          🎵 Request a song
         </h2>
 
         <div className="flex gap-2">
@@ -188,10 +188,10 @@ export default function AddSong({
             onFocus={() => setFocused(true)}
             placeholder={
               searchAvailable
-                ? "Search for a song or paste a YouTube link..."
-                : "Paste a YouTube link to queue it up..."
+                ? "Search a song or paste a YouTube link…"
+                : "Paste a YouTube link to queue it up…"
             }
-            className="input flex-1"
+            className="input flex-1 !py-3 text-base !bg-black/40 placeholder:text-white/50"
             autoComplete="off"
             spellCheck={false}
           />

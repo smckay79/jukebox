@@ -592,10 +592,17 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
         <SubscriptionBanner timeLimit={party.timeLimit} />
       ) : null}
 
-      {/* Mobile: compact now-playing up top, then search, then queue. The
-          real video player is opt-in via the header toggle — when on, we
-          render a scaled-down Player in place of the compact card. */}
+      {/* Mobile: requesting a song is the whole point of the phone view, so
+          the search box comes FIRST — above now-playing, the queue, and any
+          host tooling. Everything host-only is gated to admins so a guest
+          sees just: request → what's playing → what's next. */}
       <div className="space-y-4 md:hidden">
+        <AddSong
+          code={party.code}
+          onAdded={setParty}
+          bannedIds={bannedIds}
+          country={party.country}
+        />
         {showMobileVideo ? (
           <div className="mx-auto w-full max-w-xs space-y-2">
             <Player
@@ -639,49 +646,6 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             onBan={onBan}
           />
         )}
-        <Marquee
-          text={party.marquee}
-          useFiller={party.queue.length === 0}
-          songKey={party.nowPlaying?.id}
-        />
-        {showQR ? <QRCard code={party.code} /> : null}
-        <AddSong
-          code={party.code}
-          onAdded={setParty}
-          bannedIds={bannedIds}
-          country={party.country}
-        />
-        {isPro ? (
-          <ImportPlaylist
-            code={party.code}
-            bannedIds={bannedIds}
-            onImported={setParty}
-            country={party.country}
-            authUser={authUser}
-            isAdmin={isAdmin}
-            refreshKey={savedPlaylistsVersion}
-          />
-        ) : (
-          <div className="card flex items-center justify-between p-3">
-            <div className="flex items-center gap-2 text-sm text-white/40">
-              <span>
-                Party playlist{" "}
-                <span className="font-normal text-white/30">
-                  · loops when the queue is empty
-                </span>
-              </span>
-              <span className="rounded-full bg-brand-600/30 px-2 py-0.5 text-[10px] font-semibold text-brand-300">
-                Pro
-              </span>
-            </div>
-            <a
-              href="/pricing"
-              className="text-xs text-brand-300 underline-offset-2 hover:underline"
-            >
-              Upgrade
-            </a>
-          </div>
-        )}
         <div>
           <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
             Up next{" "}
@@ -704,8 +668,27 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
             canVote={isPro}
           />
         </div>
+        <Marquee
+          text={party.marquee}
+          useFiller={party.queue.length === 0}
+          songKey={party.nowPlaying?.id}
+        />
+        {showQR ? <QRCard code={party.code} /> : null}
+        {/* Host tooling — hidden from guests so the phone view stays focused
+            on requesting songs. */}
         {isAdmin && adminKey ? (
           <>
+            {isPro ? (
+              <ImportPlaylist
+                code={party.code}
+                bannedIds={bannedIds}
+                onImported={setParty}
+                country={party.country}
+                authUser={authUser}
+                isAdmin={isAdmin}
+                refreshKey={savedPlaylistsVersion}
+              />
+            ) : null}
             <PartyHistory
               code={party.code}
               adminKey={adminKey}
