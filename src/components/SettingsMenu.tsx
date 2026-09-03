@@ -65,6 +65,7 @@ export default function SettingsMenu({
   adminKey,
   party,
   onSetTheme,
+  onSetName,
   onSetMarquee,
   onSetCountry,
   onAddBumper,
@@ -81,6 +82,7 @@ export default function SettingsMenu({
   adminKey: string;
   party: PublicParty;
   onSetTheme: (next: PartyTheme | null) => Promise<string | null>;
+  onSetName: (name: string) => Promise<string | null>;
   onSetMarquee: (text: string) => Promise<string | null>;
   onSetCountry: (next: string | null) => Promise<string | null>;
   onAddBumper: (url: string, triggerType?: "random" | "match", triggerMatch?: string) => Promise<string | null>;
@@ -94,6 +96,10 @@ export default function SettingsMenu({
   const [busy, setBusy] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState(party.name);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameFlash, setNameFlash] = useState(false);
+  const [nameErr, setNameErr] = useState<string | null>(null);
   const [countryBusy, setCountryBusy] = useState(false);
   const [countryFlash, setCountryFlash] = useState(false);
   const [countryErr, setCountryErr] = useState<string | null>(null);
@@ -136,6 +142,12 @@ export default function SettingsMenu({
   useEffect(() => {
     setDraft(marquee ?? "");
   }, [marquee]);
+
+  // Sync the name field from the live party — so if it's renamed elsewhere
+  // (or by another admin tab) while this modal is open, we don't clobber it.
+  useEffect(() => {
+    setNameDraft(party.name);
+  }, [party.name]);
 
   // Sync label editor from the party each time the settings modal opens,
   // so it reflects any changes made elsewhere without clobbering edits mid-session.
@@ -230,6 +242,24 @@ export default function SettingsMenu({
     } else {
       setCountryFlash(true);
       setTimeout(() => setCountryFlash(false), 1200);
+    }
+  }
+
+  async function saveName() {
+    const clean = nameDraft.trim();
+    if (!clean) {
+      setNameErr("Party name can't be empty");
+      return;
+    }
+    setNameBusy(true);
+    setNameErr(null);
+    const e = await onSetName(clean);
+    setNameBusy(false);
+    if (e) {
+      setNameErr(e);
+    } else {
+      setNameFlash(true);
+      setTimeout(() => setNameFlash(false), 1200);
     }
   }
 
@@ -481,6 +511,41 @@ export default function SettingsMenu({
             </div>
 
             <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-white/80">
+                Party name
+              </h3>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => {
+                    setNameDraft(e.target.value);
+                    setNameErr(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveName();
+                  }}
+                  maxLength={80}
+                  className="input flex-1 text-sm"
+                  placeholder="The Party"
+                />
+                <button
+                  type="button"
+                  onClick={saveName}
+                  disabled={nameBusy || nameDraft.trim() === party.name}
+                  className="btn-primary !px-3 !py-1.5 text-sm"
+                >
+                  {nameBusy ? "Saving…" : "Save"}
+                </button>
+              </div>
+              {nameFlash ? (
+                <p className="text-xs text-emerald-300">Saved</p>
+              ) : nameErr ? (
+                <p className="text-xs text-red-400">{nameErr}</p>
+              ) : null}
+            </section>
+
+            <section className="mt-5 space-y-2 border-t border-white/10 pt-4">
               <h3 className="text-sm font-semibold text-white/80">
                 Background
               </h3>

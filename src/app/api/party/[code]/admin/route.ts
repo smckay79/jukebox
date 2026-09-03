@@ -9,6 +9,7 @@ import {
   removeSong,
   setCountry,
   setMarquee,
+  setPartyName,
   setTheme,
   skipCurrent,
   toPublicParty,
@@ -27,6 +28,7 @@ export const dynamic = "force-dynamic";
 //   { action: "remove", songId }
 //   { action: "ban", videoId | url, title?, thumbnail? }
 //   { action: "unban", videoId }
+//   { action: "name", name }
 //
 // Admin key is sent via the `x-admin-key` header.
 export async function POST(
@@ -47,6 +49,7 @@ export async function POST(
     thumbnail?: string;
     theme?: PartyTheme | null;
     marquee?: string;
+    name?: string;
     ip?: string;
     country?: string | null;
     triggerType?: string;
@@ -134,6 +137,15 @@ export async function POST(
 
   if (body.action === "theme") {
     const res = await setTheme(params.code, body.theme ?? null);
+    if (!res.ok) {
+      const status = res.error === "Party not found" ? 404 : 400;
+      return NextResponse.json({ error: res.error }, { status });
+    }
+    return NextResponse.json({ party: toPublicParty(res.party) });
+  }
+
+  if (body.action === "name") {
+    const res = await setPartyName(params.code, body.name ?? "");
     if (!res.ok) {
       const status = res.error === "Party not found" ? 404 : 400;
       return NextResponse.json({ error: res.error }, { status });

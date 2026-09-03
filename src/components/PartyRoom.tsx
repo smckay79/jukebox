@@ -410,6 +410,10 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
     return adminPost({ action: "theme", theme });
   }
 
+  async function onSetName(name: string): Promise<string | null> {
+    return adminPost({ action: "name", name });
+  }
+
   async function onSetMarquee(text: string): Promise<string | null> {
     return adminPost({ action: "marquee", marquee: text });
   }
@@ -565,6 +569,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
                     adminKey={adminKey}
                     party={party}
                     onSetTheme={onSetTheme}
+                    onSetName={onSetName}
                     onSetMarquee={onSetMarquee}
                     onSetCountry={onSetCountry}
                     onAddBumper={onAddBumper}
@@ -655,6 +660,7 @@ export default function PartyRoom({ initial }: { initial: PublicParty }) {
               adminKey={adminKey}
               party={party}
               onSetTheme={onSetTheme}
+              onSetName={onSetName}
               onSetMarquee={onSetMarquee}
               onSetCountry={onSetCountry}
               onAddBumper={onAddBumper}

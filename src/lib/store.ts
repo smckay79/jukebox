@@ -730,6 +730,25 @@ export async function setTheme(
   return { ok: true, party };
 }
 
+// Rename a live party. Empty input is rejected (a party always needs a
+// name) rather than silently falling back, so the host gets a clear error
+// instead of an unexplained "The Party".
+const MAX_PARTY_NAME_LEN = 80;
+
+export async function setPartyName(
+  code: string,
+  name: string,
+): Promise<{ ok: true; party: Party } | { ok: false; error: string }> {
+  const s = storage();
+  const party = await s.get(code.toUpperCase());
+  if (!party) return { ok: false, error: "Party not found" };
+  const clean = (name ?? "").toString().trim().slice(0, MAX_PARTY_NAME_LEN);
+  if (!clean) return { ok: false, error: "Party name can't be empty" };
+  party.name = clean;
+  await persist(party);
+  return { ok: true, party };
+}
+
 // Empty/whitespace-only input clears the marquee. We cap length so an
 // overenthusiastic host can't paste a novel onto the TV.
 const MAX_MARQUEE_LEN = 300;
