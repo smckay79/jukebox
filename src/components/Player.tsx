@@ -168,6 +168,93 @@ export default function Player({
   // Keep playback active when app goes to background on mobile
   useBackgroundAudio(song, playerRef, partyName);
 
+  // Background-tab keep-alive: browsers throttle (and can eventually freeze)
+  // a hidden tab's timers, which is what stops the next song from ever
+  // starting when this tab isn't focused — our end-of-song poll just stops
+  // ticking. Browsers exempt a tab from that throttling while it's actually
+  // producing audio, so we run a genuine (if effectively silent) Web Audio
+  // signal for as long as a song is loaded. This is a well-established
+  // pattern for exactly this class of background-tab problem.
+  const keepAliveRef = useRef<{
+    ctx: AudioContext;
+    osc: OscillatorNode;
+    gain: GainNode;
+  } | null>(null);
+
+  const startKeepAlive = useCallback(() => {
+    if (keepAliveRef.current) return;
+    try {
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Ctor) return;
+      const ctx = new Ctor();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.0001; // a real signal, just effectively silent
+      osc.frequency.value = 20; // near-inaudible even before the gain cut
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      keepAliveRef.current = { ctx, osc, gain };
+      // Autoplay policy applies to AudioContexts too — this resume() is a
+      // no-op if it's already running, and otherwise gets retried by the
+      // gesture listener below the first time the page is interacted with.
+      ctx.resume().catch(() => { /* needs a user gesture first */ });
+    } catch { /* Web Audio unavailable */ }
+  }, []);
+
+  const stopKeepAlive = useCallback(() => {
+    const ka = keepAliveRef.current;
+    if (!ka) return;
+    try {
+      ka.osc.stop();
+      ka.osc.disconnect();
+      ka.gain.disconnect();
+      ka.ctx.close();
+    } catch { /* already torn down */ }
+    keepAliveRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (song) startKeepAlive();
+    else stopKeepAlive();
+  }, [song, startKeepAlive, stopKeepAlive]);
+
+  // Always torn down on unmount, regardless of what `song` was last.
+  useEffect(() => stopKeepAlive, [stopKeepAlive]);
+
+  // If the tab was backgrounded long enough that timer throttling delayed
+  // (or the browser froze) our end-of-song poll, catch up the instant the
+  // tab becomes visible again instead of waiting for the next tick — this
+  // is what makes "I switched tabs and it never moved to the next song"
+  // recoverable as soon as you switch back, even if the keep-alive audio
+  // above didn't fully prevent throttling on a given browser.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      const p = playerRef.current;
+      const vid = currentVideoRef.current;
+      if (!p || !vid || endHandledRef.current === vid) return;
+      try {
+        const state = p.getPlayerState();
+        const dur = p.getDuration();
+        const cur = p.getCurrentTime();
+        const ended = state === 0 || (dur > 0 && cur > 0 && dur - cur <= 1.2);
+        if (ended) {
+          endHandledRef.current = vid;
+          onEndedRef.current(vid);
+        } else if (state === -1 || state === 2 || state === 5) {
+          // Paused/stalled/unstarted while hidden — nudge it back to life.
+          p.playVideo();
+        }
+      } catch { /* player not ready */ }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -446,6 +533,9 @@ export default function Player({
   // phase so the click-shield over the iframe can't swallow it.
   useEffect(() => {
     const unlock = () => {
+      // Resume the keep-alive AudioContext — this is what actually gets it
+      // running in browsers that require a gesture before any audio plays.
+      try { keepAliveRef.current?.ctx.resume().catch(() => {}); } catch { /* ignore */ }
       // On phones/tablets we deliberately stay muted — a guest tapping around
       // the queue shouldn't start blasting audio next to the host's speakers.
       // They can still opt in via the sound badge, slider, or M key.
