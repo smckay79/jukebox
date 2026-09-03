@@ -30,10 +30,63 @@ Expect `{"url": "...", "type": "mp4", "quality": "...", "expiresAt": "..."}`.
 A bad ID (`?id=00000000000`) should 404. `curl localhost:8080/health` checks
 the sidecar is reachable.
 
-## Deploying to Fly.io
+## Deploying to a home Docker host (Synology, etc.) — recommended
 
-Two separate Fly apps, talking over Fly's private network — not
-docker-compose, Fly doesn't run compose files directly.
+**Fly.io was tried first and doesn't work reliably** — confirmed by real
+deploy testing, not just theory: YouTube's bot detection rejects requests
+from Fly's IP ranges (`InterstitialView`/`PlayerInterstitial` parse errors,
+i.e. YouTube serving a "sign in to confirm you're not a bot" wall) regardless
+of a correctly-scoped, video-bound PO token. Datacenter IPs are simply
+treated far more suspiciously than residential ones. Running this from a
+home Docker host — a Synology, a Raspberry Pi, whatever's on your home
+network — uses your residential IP instead, which is much less likely to be
+pre-flagged.
+
+Uses [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) (free on the
+Personal plan) to get a stable public HTTPS URL without port-forwarding or
+owning a domain:
+
+```sh
+cp .env.example .env
+# fill in EXTRACTOR_SHARED_SECRET and TS_AUTHKEY in .env
+# (TS_AUTHKEY: https://login.tailscale.com/admin/settings/keys — use a
+# reusable, non-ephemeral key)
+
+docker compose -f docker-compose.synology.yml up -d --build
+
+# One-time — persists across restarts via the tailscale-state volume:
+docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel 8080
+
+# Find your public URL:
+docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel status
+```
+
+That last command prints something like `https://videojam-extractor.<your-tailnet>.ts.net`
+— that's your `VIDEO_EXTRACTOR_URL`.
+
+If the `tailscale` service fails to start with a permissions/device error,
+it's almost always Synology's Container Manager not exposing `/dev/net/tun`
+or `NET_ADMIN` — `docker-compose.synology.yml` is already set to
+`TS_USERSPACE: "true"` specifically to avoid needing those, so this
+shouldn't come up, but if it does, that env var is the fix.
+
+Then, in the Vercel project:
+- `VIDEO_EXTRACTOR_URL` = the `https://....ts.net` URL from above
+- `VIDEO_EXTRACTOR_SECRET` = the same value set in `.env`
+
+Verify:
+
+```sh
+curl -H "Authorization: Bearer <VIDEO_EXTRACTOR_SECRET>" \
+  "https://videojam-extractor.<your-tailnet>.ts.net/video-info?id=jNQXAC9IVRw"
+```
+
+## Deploying to Fly.io (not currently recommended — see above)
+
+Kept for reference in case Fly's IP reputation improves, or as a fallback
+behind a residential proxy. Two separate Fly apps, talking over Fly's
+private network — not docker-compose, Fly doesn't run compose files
+directly.
 
 ```sh
 # 1. The PO-token sidecar — the published image, unmodified.
@@ -50,14 +103,6 @@ fly deploy --config fly.toml
 Then, in the Vercel project:
 - `VIDEO_EXTRACTOR_URL` = `https://videojam-extractor.fly.dev`
 - `VIDEO_EXTRACTOR_SECRET` = the same value passed to `fly secrets set` above
-
-Verify from outside the sandbox/Fly network (source IP matters for
-PO-token/BotGuard enforcement — confirmed by testing during development):
-
-```sh
-curl -H "Authorization: Bearer <VIDEO_EXTRACTOR_SECRET>" \
-  "https://videojam-extractor.fly.dev/video-info?id=jNQXAC9IVRw"
-```
 
 ## Updating when YouTube breaks BotGuard again
 
