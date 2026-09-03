@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { shuffleArray } from "@/lib/shuffle";
 import { setPartyPlaylist, toPublicParty, verifyAdmin } from "@/lib/store";
 import { getPlaylistForOwner } from "@/lib/users";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // random signed-in user can't push playlists to someone else's party) AND
 // a valid session (so only the playlist owner can load it).
 //
-// Body: { playlistId: string }
+// Body: { playlistId: string, shuffle?: boolean }
 export async function POST(
   req: Request,
   { params }: { params: { code: string } },
@@ -26,7 +27,7 @@ export async function POST(
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  let body: { playlistId?: string } = {};
+  let body: { playlistId?: string; shuffle?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -42,7 +43,11 @@ export async function POST(
     return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
   }
 
-  const res = await setPartyPlaylist(params.code, playlist.items);
+  const items = body.shuffle
+    ? shuffleArray(playlist.items)
+    : playlist.items;
+
+  const res = await setPartyPlaylist(params.code, items);
   if (!res.ok) {
     const status = res.error === "Party not found" ? 404 : 400;
     return NextResponse.json({ error: res.error }, { status });

@@ -5,6 +5,7 @@ import EditPlaylistModal from "./EditPlaylistModal";
 import PartyPlaylistEditor from "./PartyPlaylistEditor";
 import PlaylistVideoSearchModal from "./PlaylistVideoSearchModal";
 import { getAdminKey } from "@/lib/identity";
+import { shuffleArray } from "@/lib/shuffle";
 import type {
   PublicParty,
   PublicUser,
@@ -126,6 +127,9 @@ export default function ImportPlaylist({
       setSavedError("Only the host can load a playlist into the party.");
       return;
     }
+    const shuffle = confirm(
+      "Randomize the track order before setting this as the party playlist?\n\nOK = shuffle the order. Cancel = keep it as saved.",
+    );
     setBusyPlaylistId(id);
     setSavedError(null);
     try {
@@ -135,7 +139,7 @@ export default function ImportPlaylist({
           "content-type": "application/json",
           "x-admin-key": key,
         },
-        body: JSON.stringify({ playlistId: id }),
+        body: JSON.stringify({ playlistId: id, shuffle }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -395,12 +399,18 @@ export default function ImportPlaylist({
 
   async function submit() {
     if (!items || selected.size === 0) return;
+    let picks = items
+      .filter((it) => selected.has(it.videoId))
+      .map((it) => effectiveFor(it));
+    if (picks.length > 1) {
+      const shuffle = confirm(
+        `Randomize the order of these ${picks.length} tracks before adding them to the party playlist?\n\nOK = shuffle the order. Cancel = keep the playlist's original order.`,
+      );
+      if (shuffle) picks = shuffleArray(picks);
+    }
     setSubmitting(true);
     setError(null);
     setFlash(null);
-    const picks = items
-      .filter((it) => selected.has(it.videoId))
-      .map((it) => effectiveFor(it));
     try {
       const res = await fetch(`/api/party/${code}/bulk-add`, {
         method: "POST",
