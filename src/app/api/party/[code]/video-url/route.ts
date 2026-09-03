@@ -4,6 +4,39 @@ import { getParty } from "@/lib/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Primary: our own always-on extractor service (youtubei.js + a self-hosted
+// PO-token provider — see /extractor). Configured via env; if unset or
+// unreachable, we fall through to the legacy Piped/Invidious chain below as
+// a last-resort fallback rather than hard-failing.
+const VIDEO_EXTRACTOR_URL = process.env.VIDEO_EXTRACTOR_URL;
+const VIDEO_EXTRACTOR_SECRET = process.env.VIDEO_EXTRACTOR_SECRET;
+
+async function extractViaOwnService(videoId: string) {
+  if (!VIDEO_EXTRACTOR_URL || !VIDEO_EXTRACTOR_SECRET) return null;
+  const res = await fetch(
+    `${VIDEO_EXTRACTOR_URL}/video-info?id=${encodeURIComponent(videoId)}`,
+    {
+      headers: { Authorization: `Bearer ${VIDEO_EXTRACTOR_SECRET}` },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`extractor returned ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    url: string;
+    type: string;
+    quality: string;
+  };
+  return { url: data.url, type: data.type, quality: data.quality };
+}
+
+// ---------- legacy fallback: public Piped/Invidious instances ----------
+// Kept deliberately, not deleted — cheap insurance for the rare case where
+// our own extractor service itself is down. This is the ONLY thing this
+// route used to rely on; as of the extractor above, it's a last resort.
+
 const PIPED_INSTANCES = [
   "https://api.piped.private.coffee",
   "https://pipedapi.darkness.services",
@@ -56,7 +89,6 @@ async function extractViaInvidiousProxy(
   videoId: string,
   instanceUrl: string,
 ) {
-  const host = new URL(instanceUrl).host;
   const res = await fetch(
     `${instanceUrl}/api/v1/videos/${videoId}?fields=formatStreams,adaptiveFormats`,
     { signal: AbortSignal.timeout(15000) },
@@ -96,6 +128,15 @@ export async function GET(
   }
 
   const errors: string[] = [];
+
+  try {
+    const result = await extractViaOwnService(videoId);
+    if (result) {
+      return NextResponse.json({ ...result, source: "extractor" });
+    }
+  } catch (e: unknown) {
+    errors.push(`extractor: ${e instanceof Error ? e.message : "unknown"}`);
+  }
 
   for (const instance of PIPED_INSTANCES) {
     try {

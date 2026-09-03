@@ -1,0 +1,26 @@
+# Deploys the ALREADY-PUBLISHED bgutil-ytdlp-pot-provider image directly —
+# no Dockerfile of ours involved, so it stays in sync with upstream's fixes
+# with a plain `docker pull`-equivalent redeploy. Launch with:
+#   fly launch --no-deploy --image brainicism/bgutil-ytdlp-pot-provider:1.3.2-node \
+#     --name videojam-potoken-provider --config potoken-provider.fly.toml
+# Not publicly exposed on purpose — only videojam-extractor (same Fly org)
+# reaches it, over the private 6PN network at videojam-potoken-provider.internal.
+app = "videojam-potoken-provider"
+primary_region = "iad"
+
+[build]
+  image = "brainicism/bgutil-ytdlp-pot-provider:1.3.2-node"
+
+[http_service]
+  internal_port = 4416
+  # Private only — do not set force_https/expose publicly. This service has
+  # no auth of its own (see main.ts's Origin/Sec-Fetch-Site check, which only
+  # blocks *browser*-originated cross-site calls, not a plain server fetch),
+  # so it should never be reachable from outside the Fly private network.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

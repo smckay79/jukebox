@@ -1,18 +1,6 @@
 import Foundation
 
 enum APIClient {
-    // Tried in order — public instances go down/get blocked without notice,
-    // so this needs to stay a list, not a single URL. Confirmed reachable
-    // 2026-09-03; if this one dies too, check https://api.invidious.io/ for
-    // a replacement and verify it FROM THE APPLE TV (or another residential
-    // network) — a sandboxed/datacenter IP testing this can get blocked by
-    // anti-scraping protection even when the instance is genuinely up.
-    private static let invidiousInstances = [
-        "https://yt.chocolatemoo53.com",
-        "https://invidious.darkness.services",
-        "https://invidious.private.coffee",
-    ]
-
     static func fetchPartyName(baseURL: String, code: String) async -> String {
         let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: "\(baseURL)/api/party/\(normalized)") else {
@@ -56,61 +44,33 @@ enum APIClient {
         return nil
     }
 
-    static func fetchVideoURL(videoId: String) async -> (url: String, type: String)? {
-        for instance in invidiousInstances {
-            if let result = await fetchFromInvidious(videoId: videoId, instance: instance) {
-                return result
-            }
-        }
-        print("[VideoURL] All sources failed for \(videoId)")
-        return nil
-    }
-
-    private static func fetchFromInvidious(videoId: String, instance: String) async -> (url: String, type: String)? {
-        guard let url = URL(string: "\(instance)/api/v1/videos/\(videoId)?fields=formatStreams,adaptiveFormats") else {
+    // Resolves via our own backend's /video-url route (youtubei.js-based
+    // extractor, falling back to Piped/Invidious server-side) instead of
+    // hitting Invidious directly from the device — see extractor/README.md.
+    static func fetchVideoURL(baseURL: String, code: String, videoId: String) async -> (url: String, type: String)? {
+        let normalized = code.uppercased().trimmingCharacters(in: .whitespaces)
+        guard let url = URL(string: "\(baseURL)/api/party/\(normalized)/video-url?v=\(videoId)") else {
             return nil
         }
         do {
             var request = URLRequest(url: url)
-            request.timeoutInterval = 15
-            print("[VideoURL] Trying \(instance)...")
+            request.timeoutInterval = 20
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                print("[VideoURL] \(instance) returned \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+                print("[VideoURL] backend returned \((response as? HTTPURLResponse)?.statusCode ?? 0)")
                 return nil
             }
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                print("[VideoURL] \(instance) returned invalid JSON")
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let urlString = json["url"] as? String,
+                  let type = json["type"] as? String else {
+                print("[VideoURL] backend returned unexpected JSON shape")
                 return nil
             }
-
-            // Prefer highest quality combined (video+audio) MP4 from formatStreams
-            // itag 22 = 720p, itag 18 = 360p
-            if let formats = json["formatStreams"] as? [[String: Any]] {
-                let mp4 = formats
-                    .filter { ($0["container"] as? String) == "mp4" }
-                    .sorted { resolution($0) > resolution($1) }
-                if let best = mp4.first, let itag = best["itag"] as? String {
-                    let quality = best["qualityLabel"] as? String ?? "unknown"
-                    let proxyUrl = "\(instance)/latest_version?id=\(videoId)&itag=\(itag)"
-                    print("[VideoURL] Got \(quality) combined via \(instance) (itag \(itag))")
-                    return (proxyUrl, "mp4")
-                }
-            }
-
-            print("[VideoURL] \(instance) had no usable streams")
+            return (urlString, type)
         } catch {
-            print("[VideoURL] \(instance) error: \(error.localizedDescription)")
+            print("[VideoURL] error: \(error.localizedDescription)")
+            return nil
         }
-        return nil
-    }
-
-    private static func resolution(_ format: [String: Any]) -> Int {
-        if let label = format["qualityLabel"] as? String {
-            return Int(label.replacingOccurrences(of: "p", with: "")
-                .components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "") ?? 0
-        }
-        return 0
     }
 
     static func skipSong(baseURL: String, code: String, adminKey: String) async {

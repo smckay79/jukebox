@@ -1,0 +1,26 @@
+# Deploy: fly launch --no-deploy (first time, to create the app) then
+# fly deploy. See README.md for the full sequence including the sidecar app
+# and secrets.
+app = "videojam-extractor"
+primary_region = "iad"
+
+[build]
+
+[env]
+  PORT = "8080"
+  # Fly private-network hostname of the sidecar app defined in
+  # potoken-provider.fly.toml — Fly apps in the same org can reach each
+  # other at <app-name>.internal on their 6PN network with no public exposure
+  # needed for the provider.
+  POTOKEN_PROVIDER_URL = "http://videojam-potoken-provider.internal:4416"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

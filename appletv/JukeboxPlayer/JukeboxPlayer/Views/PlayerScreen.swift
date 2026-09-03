@@ -118,7 +118,7 @@ struct PlayerScreen: View {
 
     private func handleVideoChange(videoId: String?) {
         if let videoId {
-            videoPlayer.loadVideo(videoId: videoId)
+            videoPlayer.loadVideo(baseURL: baseURL, code: code, videoId: videoId)
         } else {
             videoPlayer.stop()
         }
@@ -343,7 +343,7 @@ class VideoPlayerState: ObservableObject {
     private var statusObserver: NSKeyValueObservation?
     private var errorObserver: NSKeyValueObservation?
 
-    func loadVideo(videoId: String) {
+    func loadVideo(baseURL: String, code: String, videoId: String) {
         guard videoId != currentVideoId else { return }
         currentVideoId = videoId
         cleanupPlayer()
@@ -351,7 +351,7 @@ class VideoPlayerState: ObservableObject {
         errorMessage = nil
 
         loadTask = Task {
-            let result = await APIClient.fetchVideoURL(videoId: videoId)
+            let result = await APIClient.fetchVideoURL(baseURL: baseURL, code: code, videoId: videoId)
             guard !Task.isCancelled, currentVideoId == videoId else { return }
 
             guard let result else {
