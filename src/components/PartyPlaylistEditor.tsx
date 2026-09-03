@@ -169,6 +169,19 @@ export default function PartyPlaylistEditor({
     setDirty(true);
   }
 
+  // Fisher-Yates shuffle of the current playlist order.
+  function shuffle() {
+    setItems((arr) => {
+      const next = arr.slice();
+      for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      return next;
+    });
+    setDirty(true);
+  }
+
   function togglePick(videoId: string) {
     setPicked((s) => {
       const n = new Set(s);
@@ -268,11 +281,23 @@ export default function PartyPlaylistEditor({
             <div className="space-y-4">
               {/* Current playlist */}
               <div>
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-white/50">
-                  Playlist ·{" "}
-                  <span className="font-normal normal-case text-white/60">
-                    {items.length} track{items.length === 1 ? "" : "s"}
-                  </span>
+                <div className="mb-1 flex items-center justify-between">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                    Playlist ·{" "}
+                    <span className="font-normal normal-case text-white/60">
+                      {items.length} track{items.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  {items.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={shuffle}
+                      className="rounded bg-white/10 px-2 py-1 text-[11px] font-medium text-white/70 hover:bg-white/20"
+                      title="Randomize the playlist order"
+                    >
+                      🔀 Shuffle
+                    </button>
+                  ) : null}
                 </div>
                 {items.length === 0 ? (
                   <p className="text-xs text-white/50">
