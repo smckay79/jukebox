@@ -1,7 +1,14 @@
 import Foundation
 
 enum APIClient {
+    // Tried in order — public instances go down/get blocked without notice,
+    // so this needs to stay a list, not a single URL. Confirmed reachable
+    // 2026-09-03; if this one dies too, check https://api.invidious.io/ for
+    // a replacement and verify it FROM THE APPLE TV (or another residential
+    // network) — a sandboxed/datacenter IP testing this can get blocked by
+    // anti-scraping protection even when the instance is genuinely up.
     private static let invidiousInstances = [
+        "https://yt.chocolatemoo53.com",
         "https://invidious.darkness.services",
         "https://invidious.private.coffee",
     ]
