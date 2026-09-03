@@ -1,4 +1,4 @@
-import { getSession, invalidateSession } from "./innertube.js";
+import { getSession, getVideoPoToken, invalidateSession } from "./innertube.js";
 
 export type ExtractResult = {
   url: string;
@@ -34,7 +34,10 @@ function looksLikeAuthFailure(err: unknown): boolean {
 
 async function extractOnce(videoId: string): Promise<ExtractResult> {
   const yt = await getSession();
-  const info = await yt.getInfo(videoId);
+  // Fresh, video-bound PO token for THIS call — see innertube.ts for why the
+  // session-level (visitor-bound) token alone isn't enough here.
+  const videoPoToken = await getVideoPoToken(videoId);
+  const info = await yt.getInfo(videoId, { po_token: videoPoToken });
 
   if (info.playability_status && info.playability_status.status !== "OK") {
     throw new VideoUnavailableError(

@@ -69,3 +69,20 @@ export async function getSession(): Promise<Innertube> {
 export function invalidateSession(): void {
   poTokenExpiresAt = null;
 }
+
+// The session-level PO token above is bound to visitor data and is fine for
+// general Innertube API calls, but per yt-dlp's PO-Token-Guide, the token
+// that actually has to satisfy YouTube's player/streaming auth check is
+// bound to the SPECIFIC VIDEO being played, not the visitor. Reusing one
+// visitor-bound token across every video (the original version of this file)
+// is exactly what caused "Sign in to confirm you're not a bot" on the
+// player request even though the session-level token was valid — confirmed
+// by testing against a real deployment, not just inferred from docs. So we
+// mint a fresh, video-bound token for each extraction; the sidecar caches
+// these itself (see potoken-client.ts / bgutil-ytdlp-pot-provider's own
+// per-content-binding cache), so repeat requests for the same video are
+// still cheap.
+export async function getVideoPoToken(videoId: string): Promise<string> {
+  const { poToken } = await fetchPoToken(videoId);
+  return poToken;
+}
