@@ -50,6 +50,18 @@ async function extractOnce(videoId: string): Promise<ExtractResult> {
     throw new ExtractionFailedError("No combined video+audio format available");
   }
 
+  // youtubei.js embeds a `pot=` (PO-token) param into the deciphered URL
+  // from session.player.po_token specifically — a separate field from
+  // session.po_token that Innertube.create() never populates for us (we
+  // don't pass po_token at session-creation time). Without this, the
+  // resulting URL is missing `pot=` entirely; ordinary videos don't seem to
+  // enforce it, but stricter/licensed content's CDN edge rejects the byte
+  // fetch outright — confirmed against real videos that failed exactly this
+  // way. Use the fresh, video-bound token here too, for the same reason
+  // it's used for the getInfo() call above.
+  if (yt.session.player) {
+    yt.session.player.po_token = videoPoToken;
+  }
   const url = await format.decipher(yt.session.player);
   if (!url) {
     throw new ExtractionFailedError("Format deciphered to an empty URL");
