@@ -27,16 +27,25 @@ services:
       PORT: "8080"
       EXTRACTOR_SHARED_SECRET: ${EXTRACTOR_SHARED_SECRET:?set EXTRACTOR_SHARED_SECRET in .env}
       POTOKEN_PROVIDER_URL: http://potoken-provider:4416
-    # No published ports here on purpose — only reachable from the tailscale
-    # sidecar, which shares this container's network namespace below.
+    # No published ports here on purpose — only reachable from other
+    # containers on this compose network (e.g. tailscale, at
+    # "extractor:8080"), not exposed to your LAN/router at all.
 
   tailscale:
     image: tailscale/tailscale:latest
     restart: unless-stopped
-    # Shares extractor's network namespace so "tailscale funnel 8080" can
-    # reach the extractor at localhost:8080 without publishing that port to
-    # your LAN/router at all.
-    network_mode: service:extractor
+    # DIAGNOSTIC CHANGE: was network_mode: service:extractor (sharing the
+    # extractor's network namespace). Registration ("tailscale up") failed
+    # with "invalid key: unable to validate API key" every time under that
+    # setup, in both userspace and kernel networking modes, despite the
+    # exact same key registering cleanly from two other machines on the
+    # same network. Testing whether namespace-sharing itself was the
+    # culprit by giving this container its own normal network instead — no
+    # network_mode line, so it joins docker-compose's default bridge
+    # network same as the other services, reachable at "extractor:8080" by
+    # service name instead of "localhost:8080". If registration succeeds
+    # here, we'll come back and fix the Funnel target to point at
+    # extractor:8080 instead of a bare port.
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env — generate at https://login.tailscale.com/admin/settings/keys}
       TS_HOSTNAME: videojam-extractor
