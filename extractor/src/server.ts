@@ -1,6 +1,11 @@
 import http from "node:http";
-import { Readable } from "node:stream";
-import { extractVideo, VideoUnavailableError, ExtractionFailedError, type ExtractResult } from "./extract.js";
+import {
+  extractVideo,
+  VideoUnavailableError,
+  ExtractionFailedError,
+  type ExtractResult,
+  type InnertubeClientName,
+} from "./extract.js";
 import { providerHealthy } from "./potoken-client.js";
 import { getCached, setCached, deleteCached } from "./cache.js";
 import { signStreamToken, verifyStreamToken } from "./sign.js";
@@ -25,9 +30,10 @@ const SECRET: string = SHARED_SECRET;
 
 // Last-resort net: this is an always-on service for a live party, so one
 // video's streaming error must never take the whole container (and every
-// other listener's playback) down. The specific crash we found (a deferred
-// upstream error inside download()'s ReadableStream) is handled locally in
-// handleStream below — this is only for anything we haven't anticipated.
+// other listener's playback) down. handleStream below drives its own
+// read loop specifically so upstream failures surface as normal rejected
+// promises instead of unhandled stream 'error' events — this is only for
+// anything we haven't anticipated.
 process.on("uncaughtException", (err) => {
   console.error("[fatal] uncaughtException (recovered):", err instanceof Error ? err.stack ?? err.message : String(err));
 });
@@ -48,10 +54,13 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
 // uses elsewhere (src/lib/store.ts) for consistency.
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
-async function resolveVideo(videoId: string): Promise<ExtractResult> {
+async function resolveVideo(
+  videoId: string,
+  client: InnertubeClientName = "WEB",
+): Promise<ExtractResult> {
   const cached = getCached(videoId);
   if (cached) return cached;
-  const result = await extractVideo(videoId);
+  const result = await extractVideo(videoId, client);
   setCached(videoId, result);
   return result;
 }
@@ -74,7 +83,7 @@ function parseRange(
 
 // download() throws an InnertubeError carrying the real upstream Response
 // on a non-2xx (see youtubei.js's utils/FormatUtils.js) — pull the status
-// back out so we know whether this is worth retrying.
+// back out purely for clearer logging.
 function upstreamStatus(err: unknown): number | undefined {
   if (err && typeof err === "object" && "info" in err) {
     const info = (err as { info?: { response?: { status?: number } } }).info;
@@ -97,6 +106,25 @@ async function downloadBody(result: ExtractResult, range: { start: number; end: 
     quality: "best",
     ...(range ? { range } : {}),
   });
+}
+
+// Fetches the FIRST chunk eagerly (rather than handing back an unread
+// stream) so a failure surfaces as a normal rejected promise we can retry
+// on, before we've committed any response headers to the client. This
+// matters specifically because download()'s chunked/ranged branch (which
+// is what every real request hits — AVPlayer always sends a Range header,
+// even its very first probe) defers the actual upstream fetch until the
+// stream is *read*; naively piping it and catching errors afterward means
+// any failure arrives well after headers are already sent, too late to
+// retry — confirmed against real traffic.
+async function fetchFirstChunk(
+  result: ExtractResult,
+  range: { start: number; end: number } | null,
+) {
+  const stream = await downloadBody(result, range);
+  const reader = stream.getReader();
+  const first = await reader.read();
+  return { reader, first };
 }
 
 // YouTube's playback CDN ties a signed googlevideo.com URL to the IP that
@@ -129,7 +157,7 @@ async function handleStream(
 
   let result: ExtractResult;
   try {
-    result = await resolveVideo(videoId);
+    result = await resolveVideo(videoId, "WEB");
   } catch (err) {
     if (err instanceof VideoUnavailableError) {
       sendJson(res, 404, { error: err.message });
@@ -141,11 +169,9 @@ async function handleStream(
     return;
   }
 
-  const mimeType = result.format.mime_type?.split(";")[0] ?? "video/mp4";
-
   if (req.method === "HEAD") {
     const headers: http.OutgoingHttpHeaders = {
-      "content-type": mimeType,
+      "content-type": result.format.mime_type?.split(";")[0] ?? "video/mp4",
       "accept-ranges": "bytes",
     };
     if (result.format.content_length) {
@@ -158,53 +184,63 @@ async function handleStream(
 
   const range = parseRange(req.headers.range, result.format.content_length);
 
-  let body;
-  try {
-    body = await downloadBody(result, range);
-  } catch (err) {
-    if (upstreamStatus(err) === 403) {
-      console.warn(`[stream] ${videoId} got 403 from upstream, retrying with a fresh extraction`);
+  // Some formats — confirmed against real major-label official music
+  // videos — 403 on the actual byte-fetch even with an otherwise fully
+  // correct WEB-client request (pot=, cpn=, and YouTube's own range=
+  // convention all present). Escalate: retry once with a completely fresh
+  // WEB extraction (new PO token, new session), then fall back to the iOS
+  // client, which historically lags behind WEB on YouTube's newest
+  // playback restrictions.
+  const attempts: Array<() => Promise<ExtractResult>> = [
+    async () => result,
+    async () => {
       invalidateSession();
       deleteCached(videoId);
-      try {
-        result = await resolveVideo(videoId);
-        body = await downloadBody(result, range);
-      } catch (retryErr) {
-        if (retryErr instanceof VideoUnavailableError) {
-          sendJson(res, 404, { error: retryErr.message });
-          return;
-        }
-        const message = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        console.error(`[stream] ${videoId} retry failed:`, message);
-        sendJson(res, 502, { error: "Upstream fetch failed" });
-        return;
+      return resolveVideo(videoId, "WEB");
+    },
+    async () => {
+      deleteCached(videoId);
+      return resolveVideo(videoId, "IOS");
+    },
+  ];
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
+  let lastErr: unknown;
+
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      result = await attempts[i]();
+      const fetched = await fetchFirstChunk(result, range);
+      reader = fetched.reader;
+      firstChunk = fetched.first;
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts.length - 1) {
+        console.warn(
+          `[stream] ${videoId} attempt ${i + 1}/${attempts.length} failed (status ${upstreamStatus(err) ?? "?"}), escalating`,
+        );
       }
-    } else {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[stream] ${videoId} upstream failed:`, message);
-      sendJson(res, 502, { error: "Upstream fetch failed" });
-      return;
     }
   }
 
-  // download()'s chunked/ranged branch defers the actual upstream fetch
-  // until the stream is read (its ReadableStream's pull() callback), well
-  // after this function has already returned from the try/catch above — an
-  // upstream failure there surfaces as an 'error' event on the stream, not
-  // a rejected promise. Left unhandled, Node treats that as an uncaught
-  // exception and kills the whole process (confirmed: took the entire
-  // container down mid-party). Attach a listener before piping so it just
-  // fails this one request instead.
-  const nodeStream = Readable.fromWeb(body as import("stream/web").ReadableStream);
-  nodeStream.on("error", (err) => {
-    console.error(`[stream] ${videoId} stream error:`, err instanceof Error ? err.message : String(err));
-    if (!res.headersSent) {
-      sendJson(res, 502, { error: "Upstream stream error" });
-    } else {
-      res.destroy();
+  if (!reader || !firstChunk) {
+    if (lastErr instanceof VideoUnavailableError) {
+      sendJson(res, 404, { error: lastErr.message });
+      return;
     }
-  });
+    const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    console.error(`[stream] ${videoId} all attempts failed:`, message);
+    sendJson(res, 502, { error: "Upstream fetch failed" });
+    return;
+  }
 
+  // First chunk succeeded — safe to commit response headers now. Recompute
+  // from `result` (not any earlier reference) since the iOS fallback above
+  // may have swapped in a different format.
+  const mimeType = result.format.mime_type?.split(";")[0] ?? "video/mp4";
   const headers: http.OutgoingHttpHeaders = {
     "content-type": mimeType,
     "accept-ranges": "bytes",
@@ -219,7 +255,36 @@ async function handleStream(
     }
     res.writeHead(200, headers);
   }
-  nodeStream.pipe(res);
+
+  if (firstChunk.value) {
+    res.write(Buffer.from(firstChunk.value));
+  }
+  if (firstChunk.done) {
+    res.end();
+    return;
+  }
+
+  // Stream the rest. A failure here happens after headers (and possibly
+  // some bytes) are already committed to the client, so there's no
+  // retrying left to do — just abort the connection cleanly. AVPlayer
+  // treats a truncated response as a normal transient failure and
+  // re-requests, same as any other network hiccup.
+  const activeReader = reader;
+  (async () => {
+    try {
+      while (true) {
+        const { done, value } = await activeReader.read();
+        if (done) break;
+        if (!res.write(Buffer.from(value))) {
+          await new Promise<void>((resolve) => res.once("drain", resolve));
+        }
+      }
+      res.end();
+    } catch (err) {
+      console.error(`[stream] ${videoId} mid-stream error:`, err instanceof Error ? err.message : String(err));
+      res.destroy();
+    }
+  })();
 }
 
 const server = http.createServer(async (req, res) => {

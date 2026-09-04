@@ -32,12 +32,19 @@ function looksLikeAuthFailure(err: unknown): boolean {
   return /sign in|login required|token|forbidden|401|403/i.test(msg);
 }
 
-async function extractOnce(videoId: string): Promise<ExtractResult> {
+// Only what we actually pass through to getInfo — not imported from
+// youtubei.js's own type since its export path moves across releases.
+export type InnertubeClientName = "WEB" | "IOS";
+
+async function extractOnce(
+  videoId: string,
+  client: InnertubeClientName,
+): Promise<ExtractResult> {
   const yt = await getSession();
   // Fresh, video-bound PO token for THIS call — see innertube.ts for why the
   // session-level (visitor-bound) token alone isn't enough here.
   const videoPoToken = await getVideoPoToken(videoId);
-  const info = await yt.getInfo(videoId, { po_token: videoPoToken });
+  const info = await yt.getInfo(videoId, { po_token: videoPoToken, client });
 
   if (info.playability_status && info.playability_status.status !== "OK") {
     throw new VideoUnavailableError(
@@ -58,14 +65,17 @@ async function extractOnce(videoId: string): Promise<ExtractResult> {
   };
 }
 
-export async function extractVideo(videoId: string): Promise<ExtractResult> {
+export async function extractVideo(
+  videoId: string,
+  client: InnertubeClientName = "WEB",
+): Promise<ExtractResult> {
   try {
-    return await extractOnce(videoId);
+    return await extractOnce(videoId, client);
   } catch (err) {
     if (err instanceof VideoUnavailableError) throw err;
     if (looksLikeAuthFailure(err)) {
       invalidateSession();
-      return await extractOnce(videoId);
+      return await extractOnce(videoId, client);
     }
     throw err;
   }
