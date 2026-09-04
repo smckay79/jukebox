@@ -15,7 +15,19 @@ Vercel: /api/party/[code]/video-url ──▶ videojam-extractor ──▶ video
         (falls back to Piped/Invidious    (youtubei.js:        (brainicism/bgutil-ytdlp-
          if this is unreachable)           getInfo/chooseFormat  pot-provider image,
                                             /decipher)            unmodified)
+
+Apple TV ──▶ videojam-extractor's own /stream endpoint (NOT the raw googlevideo URL)
 ```
+
+`/video-info` doesn't hand back YouTube's own signed `googlevideo.com` URL —
+it hands back a short-lived signed URL on **this service's own** `/stream`
+endpoint, which then proxies the actual video bytes through. This matters:
+YouTube's playback CDN ties a signed URL to the IP that requested it (the
+same PO-token/BotGuard enforcement discussed above), so a client fetching
+that URL from a different network gets a 403 partway through — confirmed by
+testing. Routing playback through `/stream` means the byte-fetch always
+happens from this container's (residential) IP, regardless of where the
+Apple TV actually is.
 
 ## Local dev / testing
 
@@ -71,7 +83,9 @@ dashboard](https://one.dash.cloudflare.com/)):
 
 ```sh
 cp .env.example .env
-# fill in EXTRACTOR_SHARED_SECRET and CLOUDFLARE_TUNNEL_TOKEN in .env
+# fill in EXTRACTOR_SHARED_SECRET, CLOUDFLARE_TUNNEL_TOKEN, and
+# PUBLIC_BASE_URL (the exact hostname from the Public Hostname tab, e.g.
+# https://videojam-extractor.controlaltdeleted.com) in .env
 
 docker-compose -f docker-compose.synology.yml up -d --build
 ```

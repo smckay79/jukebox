@@ -37,6 +37,11 @@ services:
       PORT: "8080"
       EXTRACTOR_SHARED_SECRET: ${EXTRACTOR_SHARED_SECRET:?set EXTRACTOR_SHARED_SECRET in .env}
       POTOKEN_PROVIDER_URL: http://potoken-provider:4416
+      # Must be the public hostname you routed in the Cloudflare Tunnel's
+      # Public Hostname tab — used to build the /stream proxy URL handed
+      # back to the tvOS app (see server.ts for why we proxy instead of
+      # returning the raw googlevideo URL).
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env, e.g. https://videojam-extractor.controlaltdeleted.com}
     # No published ports here on purpose — only reachable from other
     # containers on this compose network (e.g. cloudflared, at
     # "extractor:8080"), not exposed to your LAN/router at all.
