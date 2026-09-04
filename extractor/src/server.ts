@@ -23,6 +23,18 @@ if (!SHARED_SECRET) {
 }
 const SECRET: string = SHARED_SECRET;
 
+// Last-resort net: this is an always-on service for a live party, so one
+// video's streaming error must never take the whole container (and every
+// other listener's playback) down. The specific crash we found (a deferred
+// upstream error inside download()'s ReadableStream) is handled locally in
+// handleStream below — this is only for anything we haven't anticipated.
+process.on("uncaughtException", (err) => {
+  console.error("[fatal] uncaughtException (recovered):", err instanceof Error ? err.stack ?? err.message : String(err));
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[fatal] unhandledRejection (recovered):", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
+});
+
 function sendJson(res: http.ServerResponse, status: number, body: unknown) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -175,6 +187,24 @@ async function handleStream(
     }
   }
 
+  // download()'s chunked/ranged branch defers the actual upstream fetch
+  // until the stream is read (its ReadableStream's pull() callback), well
+  // after this function has already returned from the try/catch above — an
+  // upstream failure there surfaces as an 'error' event on the stream, not
+  // a rejected promise. Left unhandled, Node treats that as an uncaught
+  // exception and kills the whole process (confirmed: took the entire
+  // container down mid-party). Attach a listener before piping so it just
+  // fails this one request instead.
+  const nodeStream = Readable.fromWeb(body as import("stream/web").ReadableStream);
+  nodeStream.on("error", (err) => {
+    console.error(`[stream] ${videoId} stream error:`, err instanceof Error ? err.message : String(err));
+    if (!res.headersSent) {
+      sendJson(res, 502, { error: "Upstream stream error" });
+    } else {
+      res.destroy();
+    }
+  });
+
   const headers: http.OutgoingHttpHeaders = {
     "content-type": mimeType,
     "accept-ranges": "bytes",
@@ -189,7 +219,7 @@ async function handleStream(
     }
     res.writeHead(200, headers);
   }
-  Readable.fromWeb(body as import("stream/web").ReadableStream).pipe(res);
+  nodeStream.pipe(res);
 }
 
 const server = http.createServer(async (req, res) => {
