@@ -41,11 +41,17 @@ services:
       TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env — generate at https://login.tailscale.com/admin/settings/keys}
       TS_HOSTNAME: videojam-extractor
       TS_STATE_DIR: /var/lib/tailscale
-      # Avoids needing --cap-add=NET_ADMIN / /dev/net/tun, which Synology's
-      # Container Manager doesn't reliably expose. Funnel just needs to
-      # accept/relay HTTP traffic, not do kernel-level routing, so userspace
-      # networking is the right tradeoff here.
-      TS_USERSPACE: "true"
+      # Switched from TS_USERSPACE=true to real kernel networking — on one
+      # particular Synology setup, userspace mode's registration handshake
+      # to Tailscale's control server failed with "invalid key" even with a
+      # confirmed-valid key (tested working fine from a separate machine).
+      # Kernel networking is Tailscale's normal/default mode; if Synology's
+      # Container Manager doesn't allow NET_ADMIN/tun, this will fail
+      # loudly and differently, which at least tells us something new.
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
       - tailscale-state:/var/lib/tailscale
     depends_on:
