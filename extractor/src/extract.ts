@@ -34,7 +34,7 @@ function looksLikeAuthFailure(err: unknown): boolean {
 
 // Only what we actually pass through to getInfo — not imported from
 // youtubei.js's own type since its export path moves across releases.
-export type InnertubeClientName = "WEB" | "IOS";
+export type InnertubeClientName = "WEB" | "IOS" | "ANDROID";
 
 async function extractOnce(
   videoId: string,

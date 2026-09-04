@@ -189,8 +189,11 @@ async function handleStream(
   // correct WEB-client request (pot=, cpn=, and YouTube's own range=
   // convention all present). Escalate: retry once with a completely fresh
   // WEB extraction (new PO token, new session), then fall back to the iOS
-  // client, which historically lags behind WEB on YouTube's newest
-  // playback restrictions.
+  // and Android clients, which historically lag behind WEB on YouTube's
+  // newest playback restrictions — iOS in particular often has no combined
+  // progressive format at all for a given video (confirmed: "No matching
+  // formats found" for a video WEB does have one for, just 403s on it), so
+  // Android is worth a separate attempt rather than assuming iOS covers it.
   const attempts: Array<() => Promise<ExtractResult>> = [
     async () => result,
     async () => {
@@ -201,6 +204,10 @@ async function handleStream(
     async () => {
       deleteCached(videoId);
       return resolveVideo(videoId, "IOS");
+    },
+    async () => {
+      deleteCached(videoId);
+      return resolveVideo(videoId, "ANDROID");
     },
   ];
 
