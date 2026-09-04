@@ -189,11 +189,16 @@ async function handleStream(
   // correct WEB-client request (pot=, cpn=, and YouTube's own range=
   // convention all present). Escalate: retry once with a completely fresh
   // WEB extraction (new PO token, new session), then fall back to the iOS
-  // and Android clients, which historically lag behind WEB on YouTube's
-  // newest playback restrictions — iOS in particular often has no combined
-  // progressive format at all for a given video (confirmed: "No matching
-  // formats found" for a video WEB does have one for, just 403s on it), so
-  // Android is worth a separate attempt rather than assuming iOS covers it.
+  // client, which historically lags behind WEB on YouTube's newest
+  // playback restrictions.
+  //
+  // The Android client used to be a fourth rung here. Removed: across
+  // every real video tested, it never once succeeded OR failed — the
+  // attempt just never completed at all (no timeout firing, no unhandled
+  // rejection logged, nothing), even though /health kept responding
+  // normally throughout, ruling out a blocked event loop. Root cause
+  // undiagnosed; not worth the dead time it adds when it has never once
+  // helped.
   const attempts: Array<() => Promise<ExtractResult>> = [
     async () => result,
     async () => {
@@ -204,10 +209,6 @@ async function handleStream(
     async () => {
       deleteCached(videoId);
       return resolveVideo(videoId, "IOS");
-    },
-    async () => {
-      deleteCached(videoId);
-      return resolveVideo(videoId, "ANDROID");
     },
   ];
 
