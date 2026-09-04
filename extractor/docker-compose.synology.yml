@@ -1,18 +1,28 @@
 # Production deploy for a Synology (or any always-on Docker host on your
-# home network). Adds a Tailscale sidecar in front of the extractor so
-# outbound YouTube requests go out over your home's residential IP instead
-# of a datacenter IP — Fly.io's IPs turned out to get flagged by YouTube's
-# bot detection regardless of a correctly-scoped PO token; a residential IP
-# is much less likely to be pre-flagged.
+# home network). Adds a Cloudflare Tunnel sidecar in front of the
+# extractor so outbound YouTube requests go out over your home's
+# residential IP instead of a datacenter IP — Fly.io's IPs turned out to
+# get flagged by YouTube's bot detection regardless of a correctly-scoped
+# PO token; a residential IP is much less likely to be pre-flagged.
+#
+# We tried Tailscale Funnel first (see git history) — its registration
+# handshake failed identically ("invalid key: unable to validate API key")
+# across every configuration variation on this particular Synology
+# (userspace/kernel networking, shared/standalone network namespace,
+# IPv4-only), despite the exact same key registering cleanly from two
+# other machines. Cloudflare Tunnel uses a much simpler connection model
+# (a plain outbound HTTPS/QUIC connection with a bearer token, no
+# WireGuard/registration handshake, no NET_ADMIN/tun device needed at
+# all), which sidesteps whatever that was.
 #
 # Setup (see README.md for the full walkthrough):
-#   1. Generate a reusable, non-ephemeral Tailscale auth key:
-#      https://login.tailscale.com/admin/settings/keys
-#   2. cp .env.example .env, fill in EXTRACTOR_SHARED_SECRET and TS_AUTHKEY
-#   3. docker compose -f docker-compose.synology.yml up -d --build
-#   4. One-time: docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel 8080
-#      (persists in the tailscale state volume — no need to repeat after restarts)
-#   5. Find your public URL: docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel status
+#   1. In the Cloudflare Zero Trust dashboard, create a tunnel and copy its
+#      token: https://one.dash.cloudflare.com/ -> Networks -> Tunnels
+#   2. In that same tunnel's "Public Hostname" tab, route a subdomain (e.g.
+#      videojam-extractor.controlaltdeleted.com) to http://extractor:8080
+#   3. cp .env.example .env, fill in EXTRACTOR_SHARED_SECRET and
+#      CLOUDFLARE_TUNNEL_TOKEN
+#   4. docker-compose -f docker-compose.synology.yml up -d --build
 services:
   potoken-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.3.2-node
@@ -28,52 +38,14 @@ services:
       EXTRACTOR_SHARED_SECRET: ${EXTRACTOR_SHARED_SECRET:?set EXTRACTOR_SHARED_SECRET in .env}
       POTOKEN_PROVIDER_URL: http://potoken-provider:4416
     # No published ports here on purpose — only reachable from other
-    # containers on this compose network (e.g. tailscale, at
+    # containers on this compose network (e.g. cloudflared, at
     # "extractor:8080"), not exposed to your LAN/router at all.
 
-  tailscale:
-    image: tailscale/tailscale:latest
+  cloudflared:
+    image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    # DIAGNOSTIC CHANGE: was network_mode: service:extractor (sharing the
-    # extractor's network namespace). Registration ("tailscale up") failed
-    # with "invalid key: unable to validate API key" every time under that
-    # setup, in both userspace and kernel networking modes, despite the
-    # exact same key registering cleanly from two other machines on the
-    # same network. Testing whether namespace-sharing itself was the
-    # culprit by giving this container its own normal network instead — no
-    # network_mode line, so it joins docker-compose's default bridge
-    # network same as the other services, reachable at "extractor:8080" by
-    # service name instead of "localhost:8080". If registration succeeds
-    # here, we'll come back and fix the Funnel target to point at
-    # extractor:8080 instead of a bare port.
+    command: tunnel --no-autoupdate run
     environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env — generate at https://login.tailscale.com/admin/settings/keys}
-      TS_HOSTNAME: videojam-extractor
-      TS_STATE_DIR: /var/lib/tailscale
-      # Switched from TS_USERSPACE=true to real kernel networking — on one
-      # particular Synology setup, userspace mode's registration handshake
-      # to Tailscale's control server failed with "invalid key" even with a
-      # confirmed-valid key (tested working fine from a separate machine).
-      # Kernel networking is Tailscale's normal/default mode; if Synology's
-      # Container Manager doesn't allow NET_ADMIN/tun, this will fail
-      # loudly and differently, which at least tells us something new.
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    # DIAGNOSTIC: controlplane.tailscale.com resolves to both A and AAAA
-    # records, but this container reported v6=false in its own boot logs
-    # (no real IPv6 route) — a happy-eyeballs attempt against an
-    # unreachable IPv6 address that doesn't fail cleanly could plausibly
-    # produce exactly the confusing "invalid key" symptom we've seen
-    # identically across every other config change. Forcing IPv4-only to
-    # test.
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-    volumes:
-      - tailscale-state:/var/lib/tailscale
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env — create a tunnel at https://one.dash.cloudflare.com/}
     depends_on:
       - extractor
-
-volumes:
-  tailscale-state:

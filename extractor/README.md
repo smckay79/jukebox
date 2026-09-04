@@ -42,43 +42,60 @@ home Docker host — a Synology, a Raspberry Pi, whatever's on your home
 network — uses your residential IP instead, which is much less likely to be
 pre-flagged.
 
-Uses [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) (free on the
-Personal plan) to get a stable public HTTPS URL without port-forwarding or
-owning a domain:
+Uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)
+(free) to get a stable public HTTPS URL under a domain you already control on
+Cloudflare. We tried [Tailscale Funnel](https://tailscale.com/kb/1223/funnel)
+first — its registration handshake failed identically
+(`invalid key: unable to validate API key`) across every configuration
+variation tried (userspace/kernel networking, shared/standalone network
+namespace, IPv4-only) on one particular Synology, despite the same key
+registering cleanly from two other machines. Cloudflare Tunnel's connection
+model is much simpler (a plain outbound HTTPS/QUIC connection with a bearer
+token, no WireGuard-style registration handshake, no `NET_ADMIN`/tun device
+needed), which sidesteps whatever that was.
+
+**1. Create the tunnel** (in a browser, on the [Cloudflare Zero Trust
+dashboard](https://one.dash.cloudflare.com/)):
+- **Networks → Tunnels → Create a tunnel → Cloudflared** connector.
+- Name it (e.g. `videojam-extractor`).
+- Copy the **token** shown on the install-command step — this is your
+  `CLOUDFLARE_TUNNEL_TOKEN`. (If you navigate away, get it again from the
+  tunnel's **Configure** page.)
+- On the **Public Hostname** tab, add one: pick your domain (e.g.
+  `controlaltdeleted.com`), give it a subdomain (e.g. `videojam-extractor`),
+  and set the service to `HTTP` → `extractor:8080` (that's the Docker Compose
+  service name — not `localhost`, since `cloudflared` runs in its own
+  container). Save.
+
+**2. Run it:**
 
 ```sh
 cp .env.example .env
-# fill in EXTRACTOR_SHARED_SECRET and TS_AUTHKEY in .env
-# (TS_AUTHKEY: https://login.tailscale.com/admin/settings/keys — use a
-# reusable, non-ephemeral key)
+# fill in EXTRACTOR_SHARED_SECRET and CLOUDFLARE_TUNNEL_TOKEN in .env
 
-docker compose -f docker-compose.synology.yml up -d --build
-
-# One-time — persists across restarts via the tailscale-state volume:
-docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel 8080
-
-# Find your public URL:
-docker compose -f docker-compose.synology.yml exec tailscale tailscale funnel status
+docker-compose -f docker-compose.synology.yml up -d --build
 ```
 
-That last command prints something like `https://videojam-extractor.<your-tailnet>.ts.net`
-— that's your `VIDEO_EXTRACTOR_URL`.
+That's it — no separate "enable funnel" step; the Public Hostname route you
+configured in the dashboard takes effect as soon as `cloudflared` connects.
+Confirm it connected:
 
-If the `tailscale` service fails to start with a permissions/device error,
-it's almost always Synology's Container Manager not exposing `/dev/net/tun`
-or `NET_ADMIN` — `docker-compose.synology.yml` is already set to
-`TS_USERSPACE: "true"` specifically to avoid needing those, so this
-shouldn't come up, but if it does, that env var is the fix.
+```sh
+docker-compose -f docker-compose.synology.yml logs cloudflared
+```
+
+Look for a line like `Registered tunnel connection` — that means it's live.
 
 Then, in the Vercel project:
-- `VIDEO_EXTRACTOR_URL` = the `https://....ts.net` URL from above
+- `VIDEO_EXTRACTOR_URL` = the hostname you set on the Public Hostname tab
+  (e.g. `https://videojam-extractor.controlaltdeleted.com`)
 - `VIDEO_EXTRACTOR_SECRET` = the same value set in `.env`
 
 Verify:
 
 ```sh
 curl -H "Authorization: Bearer <VIDEO_EXTRACTOR_SECRET>" \
-  "https://videojam-extractor.<your-tailnet>.ts.net/video-info?id=jNQXAC9IVRw"
+  "https://videojam-extractor.controlaltdeleted.com/video-info?id=jNQXAC9IVRw"
 ```
 
 ## Deploying to Fly.io (not currently recommended — see above)
