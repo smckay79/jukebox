@@ -21,3 +21,7 @@ export function getCached(videoId: string): ExtractResult | undefined {
 export function setCached(videoId: string, result: ExtractResult): void {
   cache.set(videoId, { result, cachedAt: Date.now() });
 }
+
+export function deleteCached(videoId: string): void {
+  cache.delete(videoId);
+}

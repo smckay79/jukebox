@@ -1,9 +1,10 @@
 import http from "node:http";
 import { Readable } from "node:stream";
-import { extractVideo, VideoUnavailableError, ExtractionFailedError } from "./extract.js";
+import { extractVideo, VideoUnavailableError, ExtractionFailedError, type ExtractResult } from "./extract.js";
 import { providerHealthy } from "./potoken-client.js";
-import { getCached, setCached } from "./cache.js";
+import { getCached, setCached, deleteCached } from "./cache.js";
 import { signStreamToken, verifyStreamToken } from "./sign.js";
+import { invalidateSession } from "./innertube.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const SHARED_SECRET = process.env.EXTRACTOR_SHARED_SECRET;
@@ -35,12 +36,31 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
 // uses elsewhere (src/lib/store.ts) for consistency.
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
-async function resolveVideo(videoId: string) {
+async function resolveVideo(videoId: string): Promise<ExtractResult> {
   const cached = getCached(videoId);
   if (cached) return cached;
   const result = await extractVideo(videoId);
   setCached(videoId, result);
   return result;
+}
+
+// googlevideo rejects our Node fetch's default (near-nonexistent) headers
+// on some formats — particularly licensed/monetized content, which gets
+// stricter CDN-side validation than an ordinary upload. Match what the WEB
+// client (the InnerTube client type used to mint this URL — see
+// innertube.ts) would actually send.
+const UPSTREAM_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  origin: "https://www.youtube.com",
+  referer: "https://www.youtube.com/",
+};
+
+function fetchUpstream(streamUrl: string, method: "GET" | "HEAD", range?: string) {
+  return fetch(streamUrl, {
+    method,
+    headers: range ? { ...UPSTREAM_HEADERS, range } : UPSTREAM_HEADERS,
+  });
 }
 
 // YouTube's playback CDN ties a signed googlevideo.com URL to the IP that
@@ -68,7 +88,7 @@ async function handleStream(
     return;
   }
 
-  let result;
+  let result: ExtractResult;
   try {
     result = await resolveVideo(videoId);
   } catch (err) {
@@ -82,11 +102,33 @@ async function handleStream(
     return;
   }
 
+  const method = req.method === "HEAD" ? "HEAD" : "GET";
   const range = req.headers.range;
-  const upstream = await fetch(result.url, {
-    method: req.method === "HEAD" ? "HEAD" : "GET",
-    headers: range ? { range } : {},
-  });
+  let upstream = await fetchUpstream(result.url, method, range);
+
+  // Some formats (particularly licensed/monetized content) get rejected on
+  // the actual byte-fetch even though the metadata request that produced
+  // the URL succeeded — confirmed against a real video that failed this way.
+  // A brand-new PO token + a brand-new extraction (not just the cached
+  // result) is what clears it, so force both and try once more.
+  if (upstream.status === 403) {
+    console.warn(`[stream] ${videoId} got 403 from upstream, retrying with a fresh extraction`);
+    invalidateSession();
+    deleteCached(videoId);
+    try {
+      result = await resolveVideo(videoId);
+    } catch (err) {
+      if (err instanceof VideoUnavailableError) {
+        sendJson(res, 404, { error: err.message });
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[stream] ${videoId} retry resolve failed:`, message);
+      sendJson(res, 502, { error: "Extraction failed" });
+      return;
+    }
+    upstream = await fetchUpstream(result.url, method, range);
+  }
 
   if (!upstream.ok && upstream.status !== 206) {
     console.error(`[stream] ${videoId} upstream returned ${upstream.status}`);
