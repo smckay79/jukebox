@@ -1,26 +1,26 @@
 import { getSession, getVideoPoToken, invalidateSession } from "./innertube.js";
 
+// Inferred rather than imported from youtubei.js's internal class paths —
+// those move across releases; the shapes we actually use (getInfo's return
+// value and chooseFormat's return value) are stable public API surface.
+type Session = Awaited<ReturnType<typeof getSession>>;
+export type VideoInfo = Awaited<ReturnType<Session["getInfo"]>>;
+export type Format = ReturnType<VideoInfo["chooseFormat"]>;
+
 export type ExtractResult = {
-  url: string;
-  type: "mp4";
+  info: VideoInfo;
+  format: Format;
+  // The video-bound PO token used to obtain `info` — session.player.po_token
+  // (a single shared field on the long-lived session) has to be reset to
+  // this exact value immediately before every download() call, in case a
+  // different video's extraction ran on the shared session in between and
+  // overwrote it. See server.ts.
+  poToken: string;
   quality: string;
-  expiresAt: string | null;
 };
 
 export class VideoUnavailableError extends Error {}
 export class ExtractionFailedError extends Error {}
-
-function parseExpiry(url: string): string | null {
-  try {
-    const expireParam = new URL(url).searchParams.get("expire");
-    if (!expireParam) return null;
-    const seconds = Number(expireParam);
-    if (!Number.isFinite(seconds)) return null;
-    return new Date(seconds * 1000).toISOString();
-  } catch {
-    return null;
-  }
-}
 
 // Auth-shaped failures (stale/rejected PO token) vs "video genuinely
 // unavailable" need different handling — only the former should trigger a
@@ -50,28 +50,11 @@ async function extractOnce(videoId: string): Promise<ExtractResult> {
     throw new ExtractionFailedError("No combined video+audio format available");
   }
 
-  // youtubei.js embeds a `pot=` (PO-token) param into the deciphered URL
-  // from session.player.po_token specifically — a separate field from
-  // session.po_token that Innertube.create() never populates for us (we
-  // don't pass po_token at session-creation time). Without this, the
-  // resulting URL is missing `pot=` entirely; ordinary videos don't seem to
-  // enforce it, but stricter/licensed content's CDN edge rejects the byte
-  // fetch outright — confirmed against real videos that failed exactly this
-  // way. Use the fresh, video-bound token here too, for the same reason
-  // it's used for the getInfo() call above.
-  if (yt.session.player) {
-    yt.session.player.po_token = videoPoToken;
-  }
-  const url = await format.decipher(yt.session.player);
-  if (!url) {
-    throw new ExtractionFailedError("Format deciphered to an empty URL");
-  }
-
   return {
-    url,
-    type: "mp4",
+    info,
+    format,
+    poToken: videoPoToken,
     quality: format.quality_label ?? format.quality ?? "unknown",
-    expiresAt: parseExpiry(url),
   };
 }
 
