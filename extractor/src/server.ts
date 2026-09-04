@@ -215,21 +215,47 @@ async function handleStream(
   let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
   let lastErr: unknown;
 
+  // Each attempt gets a hard time budget. Confirmed necessary against real
+  // traffic: every video that reached the 4th (Android) attempt just hung
+  // there indefinitely — no error, no timeout, nothing — leaving the tvOS
+  // app waiting until it gave up client-side ("Operation stopped") instead
+  // of ever getting a clean failure response. This can't cancel whatever's
+  // actually stuck underneath, but it guarantees the ladder always
+  // terminates and the client gets a real answer.
+  const ATTEMPT_TIMEOUT_MS = 8000;
+  function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`${label} timed out after ${ATTEMPT_TIMEOUT_MS}ms`)),
+        ATTEMPT_TIMEOUT_MS,
+      );
+      promise.then(
+        (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      );
+    });
+  }
+
   for (let i = 0; i < attempts.length; i++) {
     try {
-      result = await attempts[i]();
-      const fetched = await fetchFirstChunk(result, range);
+      result = await withTimeout(attempts[i](), `attempt ${i + 1}/${attempts.length} extraction`);
+      const fetched = await withTimeout(fetchFirstChunk(result, range), `attempt ${i + 1}/${attempts.length} fetch`);
       reader = fetched.reader;
       firstChunk = fetched.first;
       lastErr = undefined;
       break;
     } catch (err) {
       lastErr = err;
-      if (i < attempts.length - 1) {
-        console.warn(
-          `[stream] ${videoId} attempt ${i + 1}/${attempts.length} failed (status ${upstreamStatus(err) ?? "?"}), escalating`,
-        );
-      }
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[stream] ${videoId} attempt ${i + 1}/${attempts.length} failed (status ${upstreamStatus(err) ?? "?"}): ${message}`,
+      );
     }
   }
 
