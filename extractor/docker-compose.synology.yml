@@ -37,6 +37,9 @@ services:
       PORT: "8080"
       EXTRACTOR_SHARED_SECRET: ${EXTRACTOR_SHARED_SECRET:?set EXTRACTOR_SHARED_SECRET in .env}
       POTOKEN_PROVIDER_URL: http://potoken-provider:4416
+      MAX_HLS_SESSIONS: ${MAX_HLS_SESSIONS:-4}
+      HLS_SESSION_TTL_MS: ${HLS_SESSION_TTL_MS:-7200000}
+      HLS_READY_TIMEOUT_MS: ${HLS_READY_TIMEOUT_MS:-45000}
       # Must be the public hostname you routed in the Cloudflare Tunnel's
       # Public Hostname tab — used to build the /stream proxy URL handed
       # back to the tvOS app (see server.ts for why we proxy instead of

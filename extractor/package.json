@@ -2,7 +2,7 @@
   "name": "videojam-extractor",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone always-on service that resolves a YouTube video ID to a playable stream URL for the tvOS app, using youtubei.js against a self-hosted PO-token provider instead of scraping public Piped/Invidious instances.",
+  "description": "Standalone service that resolves YouTube videos to progressive MP4 or server-packaged SABR/HLS streams for the VideoJam tvOS app.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -13,6 +13,7 @@
     "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
+    "googlevideo": "^4.1.1",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {

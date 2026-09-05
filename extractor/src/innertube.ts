@@ -9,7 +9,23 @@ import { fetchPoToken } from "./potoken-client.js";
 // documented Function-constructor shim is fine here. Confirmed required via
 // actual end-to-end testing, not just the types — this is exactly the kind
 // of thing that only shows up at runtime.
-Platform.shim.eval = async (data) => new Function(data.output)();
+Platform.shim.eval = async (data, env) => {
+  const properties: string[] = [];
+
+  if (env.n) {
+    properties.push(`n: exportedVars.nFunction("${env.n}")`);
+  }
+  if (env.sig) {
+    properties.push(`sig: exportedVars.sigFunction("${env.sig}")`);
+  }
+
+  // youtubei.js 18's generated script defines `exportedVars`; its evaluator
+  // contract expects the transformed n/signature values back as an object.
+  // Merely evaluating data.output (the old shim) discards those values and
+  // can leave both progressive and SABR URLs undeciphered.
+  const code = `${data.output}\nreturn { ${properties.join(", ")} }`;
+  return new Function(code)();
+};
 
 // One long-lived Innertube session + PO token for this process's entire
 // lifetime, refreshed lazily. This only makes sense because the service is a

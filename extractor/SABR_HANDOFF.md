@@ -1,5 +1,16 @@
 # Handoff: YouTube SABR-enforcement blocking some videos in VideoJam's extractor
 
+> **Resolved on 2026-09-04:** the extractor now integrates the released
+> [`googlevideo` 4.1.1](https://github.com/LuanRT/googlevideo) `SabrStream`
+> implementation. `/video-info` probes progressive delivery and, on the
+> selective 403 described below, returns a signed HLS URL. `SabrStream`
+> demultiplexes YouTube's UMP response; `ffmpeg` stream-copies the selected
+> H.264/AAC tracks into HLS that tvOS `AVPlayer` consumes without app changes.
+> Live Docker tests produced complete HLS playlists for three IDs previously
+> listed as blocked (`abaielFw_Xw`, `_VnwVOf3NxE`, `XZVpR3Pk-r8`), verified
+> 206 segment ranges, and confirmed H.264 720p plus AAC with `ffprobe`.
+> The remainder of this document is retained as the historical investigation.
+
 ## What this project is
 
 "VideoJam" is a party jukebox web app (Next.js, deployed on Vercel at
@@ -17,8 +28,9 @@ ID, which `AVPlayer` then plays.
 ## Repo / branch
 
 - Repo: `smckay79/jukebox` (GitHub)
-- Branch: `claude/youtube-jukebox-qr-zTy3V` — all work described here is
-  committed and pushed to this branch already, nothing local/uncommitted.
+- Branch: `claude/youtube-jukebox-qr-zTy3V`. The investigation predating the
+  resolution above is committed and pushed; the SABR/HLS resolution is the
+  current local change set pending review and deployment.
 - The extractor service lives entirely under `extractor/` — a standalone
   Node/TypeScript service, **not** part of the Next.js app, deployed
   separately (see "Deployment" below).

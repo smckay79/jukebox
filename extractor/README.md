@@ -1,9 +1,11 @@
 # videojam-extractor
 
 Standalone always-on service that resolves a YouTube video ID to a playable
-stream URL for the tvOS app. Replaces scraping public Piped/Invidious
-instances (which broke wholesale under YouTube's PO-token enforcement) with
-`youtubei.js` talking directly to YouTube, backed by a self-hosted
+stream URL for the tvOS app. It supports both YouTube's older progressive
+MP4 delivery and its newer SABR-only delivery for licensed/official videos.
+It replaces scraping public Piped/Invidious instances (which broke wholesale
+under YouTube's PO-token enforcement) with `youtubei.js` talking directly to
+YouTube, backed by a self-hosted
 [bgutil-ytdlp-pot-provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
 sidecar for the PO-token/BotGuard side — we deliberately don't reimplement
 that logic ourselves; it's intricate and actively patched upstream as YouTube
@@ -11,23 +13,38 @@ changes things, and owning a copy of it would just move that maintenance
 burden onto us.
 
 ```
-Vercel: /api/party/[code]/video-url ──▶ videojam-extractor ──▶ videojam-potoken-provider
-        (falls back to Piped/Invidious    (youtubei.js:        (brainicism/bgutil-ytdlp-
-         if this is unreachable)           getInfo/chooseFormat  pot-provider image,
-                                            /decipher)            unmodified)
-
-Apple TV ──▶ videojam-extractor's own /stream endpoint (NOT the raw googlevideo URL)
+Vercel: /api/party/[code]/video-url ──▶ videojam-extractor ──▶ PO-token sidecar
+                                                │
+                         progressive works ─────┴──▶ signed /stream MP4 proxy
+                         progressive 403s ─────────▶ SABR demux ─▶ ffmpeg HLS
+                                                                    │
+Apple TV / AVPlayer ◀──────────────── signed /stream or /hls URL ───┘
 ```
 
-`/video-info` doesn't hand back YouTube's own signed `googlevideo.com` URL —
-it hands back a short-lived signed URL on **this service's own** `/stream`
-endpoint, which then proxies the actual video bytes through. This matters:
+`/video-info` never hands back YouTube's own signed `googlevideo.com` URL. It
+first probes two bytes of the best combined progressive format. When that
+works, it returns a short-lived signed URL on this service's `/stream`
+endpoint, which proxies the actual video bytes through. This matters:
 YouTube's playback CDN ties a signed URL to the IP that requested it (the
 same PO-token/BotGuard enforcement discussed above), so a client fetching
 that URL from a different network gets a 403 partway through — confirmed by
 testing. Routing playback through `/stream` means the byte-fetch always
 happens from this container's (residential) IP, regardless of where the
 Apple TV actually is.
+
+When the progressive probe gets the selective 403 used for many official or
+major-label videos, `/video-info` instead returns a signed `/hls/.../index.m3u8`
+URL with `type: "hls"`. The extractor uses the released
+[`googlevideo`](https://github.com/LuanRT/googlevideo) SABR client to POST the
+protobuf playback state and demultiplex the UMP response into separate H.264
+and AAC streams. The Docker image's `ffmpeg` then stream-copies those tracks
+into ordinary MPEG-TS HLS segments. `AVPlayer` supports that result natively;
+no SABR protocol code or custom player is needed in the tvOS app.
+
+HLS sessions are shared per video, limited to four by default, and removed
+after two idle hours. Playlists and segments live only in the container's
+temporary cache. Relative segment URLs inherit the signed capability path,
+so neither playlists nor media are exposed without a valid signature.
 
 ## Local dev / testing
 
@@ -38,9 +55,19 @@ curl -H "Authorization: Bearer <your secret>" \
   "http://localhost:8080/video-info?id=jNQXAC9IVRw"
 ```
 
-Expect `{"url": "...", "type": "mp4", "quality": "...", "expiresAt": "..."}`.
+Expect `{"url": "...", "type": "mp4", "quality": "..."}` for a progressive
+video, or the same response with `type: "hls"` and a `.m3u8` URL when SABR is
+required. Fetch the returned URL to verify actual media delivery; the first
+HLS request may wait a few seconds for its initial segment.
 A bad ID (`?id=00000000000`) should 404. `curl localhost:8080/health` checks
 the sidecar is reachable.
+
+The following optional environment variables tune the bounded HLS cache:
+
+- `MAX_HLS_SESSIONS` (default `4`)
+- `HLS_SESSION_TTL_MS` (default `7200000`, two hours)
+- `HLS_READY_TIMEOUT_MS` (default `45000`)
+- `HLS_CACHE_DIR` (default: the container's temporary directory)
 
 ## Deploying to a home Docker host (Synology, etc.) — recommended
 
@@ -89,6 +116,11 @@ cp .env.example .env
 
 docker-compose -f docker-compose.synology.yml up -d --build
 ```
+
+The extractor image now includes `ffmpeg` for lossless H.264/AAC-to-HLS
+packaging. Allow enough container storage for up to four cached 720p music
+videos (or lower `MAX_HLS_SESSIONS` on a space-constrained host). This is
+stream-copy packaging, not video transcoding, so CPU use stays modest.
 
 That's it — no separate "enable funnel" step; the Public Hostname route you
 configured in the dashboard takes effect as soon as `cloudflared` connects.
@@ -146,6 +178,9 @@ fly deploy --config potoken-provider.fly.toml --image brainicism/bgutil-ytdlp-po
 ```
 
 Check https://github.com/Brainicism/bgutil-ytdlp-pot-provider for new tags —
-no code changes needed on our side unless `youtubei.js`'s own `getInfo`/
-`chooseFormat`/`decipher` API surface changes, in which case `npm update
-youtubei.js` and re-check `extractor/src/extract.ts` against its types.
+no code changes are normally needed on our side. Also watch releases of
+[`youtubei.js`](https://github.com/LuanRT/YouTube.js) and
+[`googlevideo`](https://github.com/LuanRT/googlevideo). If their player,
+format, or SABR APIs change, update the locked dependencies and re-check
+`src/extract.ts`, `src/innertube.ts`, and `src/sabr-hls.ts` against their
+types, then repeat both a progressive-video and official-video live test.
